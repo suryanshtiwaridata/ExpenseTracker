@@ -1,0 +1,76 @@
+from fastapi import APIRouter, HTTPException, Depends, status
+from app.models import ExpenseCreate, Expense, ExpenseSource
+from app.database import get_database
+from app.routers.auth import oauth2_scheme
+from jose import jwt, JWTError
+from app.auth.utils import SECRET_KEY, ALGORITHM
+from datetime import datetime
+from typing import List
+import uuid
+
+router = APIRouter(prefix="/expenses", tags=["expenses"])
+db = get_database()
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        user = await db.users.find_one({"email": email})
+        if user is None:
+            raise HTTPException(status_code=401, detail="User not found")
+        return user
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+@router.post("/", response_model=Expense)
+async def create_expense(expense: ExpenseCreate, current_user: dict = Depends(get_current_user)):
+    expense_dict = expense.dict()
+    expense_dict["id"] = str(uuid.uuid4())
+    expense_dict["user_id"] = current_user["id"]
+    expense_dict["created_at"] = datetime.utcnow()
+    
+    await db.expenses.insert_one(expense_dict)
+    return expense_dict
+
+@router.get("/", response_model=List[Expense])
+async def get_expenses(current_user: dict = Depends(get_current_user)):
+    cursor = db.expenses.find({"user_id": current_user["id"]}).sort("date", -1)
+    expenses = await cursor.to_list(length=100)
+    return expenses
+
+@router.delete("/{expense_id}")
+async def delete_expense(expense_id: str, current_user: dict = Depends(get_current_user)):
+    result = await db.expenses.delete_one({"id": expense_id, "user_id": current_user["id"]})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    return {"status": "deleted"}
+
+@router.get("/summary")
+async def get_summary(current_user: dict = Depends(get_current_user)):
+    # Simple summary of total spent
+    cursor = db.expenses.find({"user_id": current_user["id"]})
+    expenses = await cursor.to_list(length=None)
+    total = sum(e["amount"] for e in expenses)
+    return {"total_spent": total}
+
+@router.post("/parse-receipt")
+async def parse_receipt(payload: dict, current_user: dict = Depends(get_current_user)):
+    from app.ocr_utils import extract_receipt_data
+    image_base64 = payload.get("image")
+    if not image_base64:
+        raise HTTPException(status_code=400, detail="No image provided")
+    
+    data = extract_receipt_data(image_base64)
+    return data
+
+@router.post("/parse-sms")
+async def parse_sms(payload: dict, current_user: dict = Depends(get_current_user)):
+    from app.sms_utils import parse_transaction_sms
+    text = payload.get("text")
+    if not text:
+        raise HTTPException(status_code=400, detail="No SMS text provided")
+    
+    data = parse_transaction_sms(text)
+    return data

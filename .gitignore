@@ -1,0 +1,27 @@
+# Common
+.DS_Store
+.env
+.env.local
+*.log
+
+# Backend (Python)
+backend/venv/
+backend/.venv/
+backend/__pycache__/
+backend/*.pyc
+backend/.pytest_cache/
+
+# Frontend (React Native / Expo)
+frontend/node_modules/
+frontend/.expo/
+frontend/dist/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/.npm/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo

@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+motor
+pydantic[email]
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+python-dotenv
+requests
+pytesseract
+Pillow
