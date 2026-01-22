@@ -36,3 +36,53 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     
     access_token = create_access_token(data={"sub": user["email"]})
     return {"access_token": access_token, "token_type": "bearer"}
+
+@router.post("/reset-password")
+async def reset_password(payload: dict, token: str = Depends(oauth2_scheme)):
+    from jose import jwt, JWTError
+    from app.auth.utils import SECRET_KEY, ALGORITHM
+    
+    try:
+        payload_data = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload_data.get("sub")
+        if email is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        user = await db.users.find_one({"email": email})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        current_password = payload.get("current_password")
+        new_password = payload.get("new_password")
+        
+        if not current_password or not new_password:
+            raise HTTPException(status_code=400, detail="Missing passwords")
+            
+        if not verify_password(current_password, user["password_hash"]):
+            raise HTTPException(status_code=400, detail="Incorrect current password")
+            
+        new_password_hash = get_password_hash(new_password)
+        await db.users.update_one({"email": email}, {"$set": {"password_hash": new_password_hash}})
+        
+        return {"message": "Password reset successful"}
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+@router.get("/me", response_model=UserInDB)
+async def get_me(token: str = Depends(oauth2_scheme)):
+    from jose import jwt, JWTError
+    from app.auth.utils import SECRET_KEY, ALGORITHM
+    
+    try:
+        payload_data = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload_data.get("sub")
+        if email is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        user = await db.users.find_one({"email": email})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        return user
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")

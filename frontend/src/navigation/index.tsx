@@ -1,5 +1,5 @@
 import React from 'react';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
 import { NavigationContainer } from '@react-navigation/native';
 import { Home, PlusCircle, BarChart2, User } from 'lucide-react-native';
 import { useStore } from '../store/useStore';
@@ -13,53 +13,58 @@ import Profile from '../screens/main/Profile';
 import Login from '../screens/auth/Login';
 import Register from '../screens/auth/Register';
 
-const Tab = createBottomTabNavigator();
+const Tab = createMaterialTopTabNavigator();
 
 const TabNavigator = () => (
     <Tab.Navigator
+        tabBarPosition="bottom"
         screenOptions={{
-            tabBarStyle: {
-                backgroundColor: COLORS.surface,
-                borderTopWidth: 0,
-                height: 60,
-                paddingBottom: 10,
-            },
             tabBarActiveTintColor: COLORS.primary,
             tabBarInactiveTintColor: COLORS.textSecondary,
-            headerStyle: {
-                backgroundColor: COLORS.background,
+            tabBarIndicatorStyle: {
+                backgroundColor: COLORS.primary,
+                top: 0,
+            },
+            tabBarStyle: {
+                backgroundColor: COLORS.surface,
                 elevation: 0,
                 shadowOpacity: 0,
+                height: 60,
             },
-            headerTintColor: COLORS.text,
+            tabBarLabelStyle: {
+                fontSize: 10,
+                fontWeight: 'bold',
+                textTransform: 'none',
+            },
+            tabBarShowIcon: true,
         }}
     >
         <Tab.Screen
             name="Home"
             component={Dashboard}
             options={{
-                tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
+                tabBarIcon: ({ color }) => <Home color={color} size={24} />,
             }}
         />
         <Tab.Screen
             name="Add"
             component={AddExpense}
             options={{
-                tabBarIcon: ({ color, size }) => <PlusCircle color={color} size={size} />,
+                tabBarIcon: ({ color }) => <PlusCircle color={color} size={24} />,
             }}
         />
         <Tab.Screen
             name="Analytics"
             component={Analytics}
             options={{
-                tabBarIcon: ({ color, size }) => <BarChart2 color={color} size={size} />,
+                tabBarIcon: ({ color }) => <BarChart2 color={color} size={24} />,
             }}
         />
         <Tab.Screen
             name="Profile"
             component={Profile}
             options={{
-                tabBarIcon: ({ color, size }) => <User color={color} size={size} />,
+                tabBarIcon: ({ color }) => <User color={color} size={24} />,
             }}
         />
     </Tab.Navigator>

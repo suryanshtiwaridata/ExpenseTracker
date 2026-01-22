@@ -7,6 +7,7 @@ class ExpenseSource(str, Enum):
     MANUAL = "manual"
     SMS = "sms"
     RECEIPT = "receipt"
+    PDF = "pdf"
 
 class UserBase(BaseModel):
     email: EmailStr
@@ -26,7 +27,12 @@ class ExpenseBase(BaseModel):
     category: str
     description: Optional[str] = None
     platform: Optional[str] = None
+    payment_mode: Optional[str] = "upi" # Default to upi as it's most common in statements
+    tax_amount: Optional[float] = 0.0
+    tax_type: Optional[str] = None # GST, VAT, etc.
     receipt_image_base64: Optional[str] = None
+    vendor: Optional[str] = None
+    items: Optional[List[str]] = None
     source: ExpenseSource = ExpenseSource.MANUAL
     currency: str = "INR"
 

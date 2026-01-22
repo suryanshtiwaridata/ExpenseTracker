@@ -21,6 +21,12 @@ const Login = ({ onRegister }: { onRegister: () => void }) => {
             });
 
             setToken(response.data.access_token);
+
+            // Fetch user profile
+            const userRes = await client.get('/auth/me', {
+                headers: { 'Authorization': `Bearer ${response.data.access_token}` }
+            });
+            useStore.getState().setUser(userRes.data);
         } catch (error) {
             console.error('Login failed', error);
             alert('Login failed. Please check your credentials.');

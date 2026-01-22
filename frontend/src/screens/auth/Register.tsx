@@ -24,6 +24,12 @@ const Register = ({ onBack }: { onBack: () => void }) => {
             });
 
             setToken(response.data.access_token);
+
+            // Fetch user profile
+            const userRes = await client.get('/auth/me', {
+                headers: { 'Authorization': `Bearer ${response.data.access_token}` }
+            });
+            useStore.getState().setUser(userRes.data);
         } catch (error) {
             console.error('Registration failed', error);
             alert('Registration failed. Please try again.');

@@ -37,7 +37,7 @@ async def create_expense(expense: ExpenseCreate, current_user: dict = Depends(ge
 @router.get("/", response_model=List[Expense])
 async def get_expenses(current_user: dict = Depends(get_current_user)):
     cursor = db.expenses.find({"user_id": current_user["id"]}).sort("date", -1)
-    expenses = await cursor.to_list(length=100)
+    expenses = await cursor.to_list(length=1000)
     return expenses
 
 @router.delete("/{expense_id}")
@@ -74,3 +74,13 @@ async def parse_sms(payload: dict, current_user: dict = Depends(get_current_user
     
     data = parse_transaction_sms(text)
     return data
+
+@router.post("/parse-pdf")
+async def parse_pdf(payload: dict, current_user: dict = Depends(get_current_user)):
+    from app.pdf_utils import parse_bank_statement_pdf
+    pdf_base64 = payload.get("pdf")
+    if not pdf_base64:
+        raise HTTPException(status_code=400, detail="No PDF data provided")
+    
+    expenses = parse_bank_statement_pdf(pdf_base64)
+    return expenses

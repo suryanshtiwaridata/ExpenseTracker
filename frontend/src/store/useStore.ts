@@ -13,7 +13,12 @@ interface Expense {
     date: string;
     category: string;
     description?: string;
+    vendor?: string;
+    items?: string[];
     source: string;
+    payment_mode?: string;
+    tax_amount?: number;
+    tax_type?: string;
     currency: string;
 }
 
@@ -24,6 +29,7 @@ interface AppState {
     setUser: (user: User | null) => void;
     setToken: (token: string | null) => void;
     setExpenses: (expenses: Expense[]) => void;
+    removeExpense: (id: string) => void;
     logout: () => void;
 }
 
@@ -34,5 +40,6 @@ export const useStore = create<AppState>((set) => ({
     setUser: (user) => set({ user }),
     setToken: (token) => set({ token }),
     setExpenses: (expenses) => set({ expenses }),
+    removeExpense: (id) => set((state) => ({ expenses: state.expenses.filter((e) => e.id !== id) })),
     logout: () => set({ user: null, token: null, expenses: [] }),
 }));
