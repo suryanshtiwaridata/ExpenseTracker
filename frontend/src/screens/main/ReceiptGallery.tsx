@@ -7,8 +7,8 @@ import { X, Receipt, Search, ZoomIn } from 'lucide-react-native';
 import { format } from 'date-fns';
 
 const { width } = Dimensions.get('window');
-const COLUMN_COUNT = 2;
-const ITEM_WIDTH = (width - 48 - 12) / COLUMN_COUNT;
+// Removing grid constants since we are moving to a list
+import { FileText, ChevronRight } from 'lucide-react-native';
 
 const ReceiptGallery = () => {
     const { expenses } = useStore();
@@ -19,17 +19,22 @@ const ReceiptGallery = () => {
 
     const renderItem = ({ item }: { item: any }) => (
         <TouchableOpacity
-            style={styles.receiptItem}
+            style={styles.transactionItem}
             onPress={() => setSelectedImage(item.receipt_image_base64)}
+            activeOpacity={0.7}
         >
-            <Image
-                source={{ uri: `data:image/jpeg;base64,${item.receipt_image_base64}` }}
-                style={styles.receiptImage}
-            />
-            <View style={styles.receiptOverlay}>
-                <Text style={styles.receiptAmount}>₹{item.amount.toLocaleString()}</Text>
-                <Text style={styles.receiptDate}>{format(new Date(item.date), 'MMM dd, yyyy')}</Text>
-                <Text style={styles.receiptVendor} numberOfLines={1}>{item.vendor || 'Unknown Vendor'}</Text>
+            <View style={styles.itemLeft}>
+                <View style={styles.iconContainer}>
+                    <FileText color={COLORS.primary} size={20} />
+                </View>
+                <View style={styles.txInfo}>
+                    <Text style={styles.txVendor}>{item.vendor || 'Unknown Vendor'}</Text>
+                    <Text style={styles.txDate}>{format(new Date(item.date), 'dd MMM yyyy')}</Text>
+                </View>
+            </View>
+            <View style={styles.itemRight}>
+                <Text style={styles.txAmount}>₹{item.amount.toLocaleString()}</Text>
+                <ChevronRight color={COLORS.textSecondary} size={16} />
             </View>
         </TouchableOpacity>
     );
@@ -51,7 +56,7 @@ const ReceiptGallery = () => {
                     data={receiptExpenses}
                     renderItem={renderItem}
                     keyExtractor={(item) => item.id}
-                    numColumns={COLUMN_COUNT}
+                    numColumns={1}
                     contentContainerStyle={styles.listContent}
                     showsVerticalScrollIndicator={false}
                 />
@@ -124,48 +129,53 @@ const styles = StyleSheet.create({
         paddingHorizontal: 24,
         paddingBottom: 100,
     },
-    receiptItem: {
-        width: ITEM_WIDTH,
-        height: ITEM_WIDTH * 1.4,
-        marginBottom: 12,
-        marginRight: 12,
-        borderRadius: 20,
-        overflow: 'hidden',
+    transactionItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 18,
+        borderBottomWidth: 1,
+        borderBottomColor: '#111',
+    },
+    itemLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 16,
+    },
+    iconContainer: {
+        width: 44,
+        height: 44,
+        borderRadius: 12,
         backgroundColor: COLORS.card,
+        justifyContent: 'center',
+        alignItems: 'center',
         borderWidth: 1,
         borderColor: '#111',
     },
-    receiptImage: {
-        width: '100%',
-        height: '100%',
-        opacity: 0.6,
+    txInfo: {
+        gap: 4,
     },
-    receiptOverlay: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        padding: 12,
-        backgroundColor: 'rgba(0,0,0,0.6)',
+    txVendor: {
+        color: COLORS.text,
+        fontSize: 15,
+        fontWeight: 'bold',
+        letterSpacing: 0.5,
     },
-    receiptAmount: {
+    txDate: {
+        color: COLORS.textSecondary,
+        fontSize: 12,
+        fontWeight: 'bold',
+        textTransform: 'uppercase',
+    },
+    itemRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    txAmount: {
         color: COLORS.text,
         fontSize: 16,
         fontWeight: 'bold',
-    },
-    receiptDate: {
-        color: COLORS.textSecondary,
-        fontSize: 10,
-        fontWeight: 'bold',
-        textTransform: 'uppercase',
-        marginTop: 2,
-    },
-    receiptVendor: {
-        color: COLORS.primary,
-        fontSize: 10,
-        fontWeight: 'bold',
-        textTransform: 'uppercase',
-        marginTop: 4,
     },
     emptyContainer: {
         flex: 1,

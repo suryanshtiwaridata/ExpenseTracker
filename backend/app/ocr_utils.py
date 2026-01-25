@@ -1,20 +1,47 @@
 import pytesseract
-from PIL import Image
+from PIL import Image, ImageOps, ImageEnhance
 import io
 import re
 import base64
 
+def preprocess_image(image: Image.Image) -> Image.Image:
+    """
+    Simulates a document scanner effect by converting to grayscale,
+    increasing contrast, and sharpening.
+    """
+    # Convert to grayscale
+    image = ImageOps.grayscale(image)
+    
+    # Increase contrast significantly to make it look like a scan
+    enhancer = ImageEnhance.Contrast(image)
+    image = enhancer.enhance(2.5) # High contrast
+    
+    # Sharpen to make text stand out
+    enhancer = ImageEnhance.Sharpness(image)
+    image = enhancer.enhance(2.0)
+    
+    return image
+
 def extract_receipt_data(image_base64: str):
     """
     Extracts total amount and date from a base64 encoded receipt image.
+    Also returns a preprocessed "scanned" version of the image.
     """
     try:
         # Decode base64 image
-        image_data = base64.b64decode(image_base64)
+        image_data = base64.decodebytes(image_base64.encode('utf-8'))
         image = Image.open(io.BytesIO(image_data))
         
-        # Perform OCR
-        text = pytesseract.image_to_string(image)
+        # Preprocess to look like a "Scan"
+        scanned_image = preprocess_image(image)
+        
+        # Convert scanned image back to base64
+        buffered = io.BytesIO()
+        scanned_image.save(buffered, format="JPEG", quality=85)
+        scanned_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
+        
+        # Perform OCR on the preprocessed image
+        text = pytesseract.image_to_string(scanned_image)
         
         # Regex patterns for total amount
         # Looks for "Total", "Grand Total", POS "Sale", etc.
@@ -135,8 +162,50 @@ def extract_receipt_data(image_base64: str):
         tax_amount = gst_details["total_gst"]
         tax_type = "GST" if tax_amount > 0 else None
             
+        # Date extraction
+        date_patterns = [
+            r"(\d{1,2})[/\-\.](\d{1,2})[/\-\.](\d{2,4})", # DD/MM/YYYY or MM/DD/YYYY
+            r"(\d{4})[/\-\.](\d{1,2})[/\-\.](\d{1,2})", # YYYY-MM-DD
+            r"(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{2,4})", # DD MMM YYYY
+        ]
+        
+        extracted_date = None
+        for pattern in date_patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                try:
+                    groups = match.groups()
+                    if len(groups) == 3:
+                        # Heuristic for DD/MM/YYYY vs MM/DD/YYYY
+                        # If first group > 12, it's definitely DD/MM
+                        # Otherwise, assume DD/MM (most common outside US)
+                        if len(groups[0]) == 4: # YYYY-MM-DD
+                            year, month, day = int(groups[0]), int(groups[1]), int(groups[2])
+                        elif groups[1].isalpha(): # DD MMM YYYY
+                            day = int(groups[0])
+                            month_str = groups[1].capitalize()[:3]
+                            months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+                            month = months.index(month_str) + 1
+                            year = int(groups[2])
+                            if year < 100: year += 2000
+                        else: # DD/MM/YYYY
+                            d1, d2, year = int(groups[0]), int(groups[1]), int(groups[2])
+                            if d1 > 12:
+                                day, month = d1, d2
+                            else:
+                                day, month = d1, d2 # Default to DD/MM
+                            if year < 100: year += 2000
+                        
+                        # Validate date
+                        import datetime
+                        extracted_date = datetime.datetime(year, month, day).isoformat()
+                        break
+                except Exception:
+                    continue
+
         return {
             "amount": amount,
+            "date": extracted_date,
             "description": description,
             "vendor": vendor,
             "items": items[:5],
@@ -145,6 +214,7 @@ def extract_receipt_data(image_base64: str):
             "tax_amount": tax_amount,
             "tax_type": tax_type,
             "gst_details": gst_details,
+            "scanned_image": scanned_base64,
             "raw_text": text[:1500]
         }
     except Exception as e:

@@ -1,18 +1,19 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, ActivityIndicator, Platform, Modal } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../theme/colors';
 import * as ImagePicker from 'expo-image-picker';
 import client from '../../api/client';
 import { useStore } from '../../store/useStore';
-import { Camera, Image as ImageIcon, Plus, Info, Tag, IndianRupee, Clock, CheckCircle2, XCircle, FileText, Wallet } from 'lucide-react-native';
+import { Camera, Image as ImageIcon, Plus, Info, Tag, IndianRupee, Clock, CheckCircle2, XCircle, FileText, Wallet, Calendar } from 'lucide-react-native';
 
 const CATEGORIES = ['Food Delivery', 'Groceries', 'Shopping', 'Transport', 'Entertainment', 'Bills & Utilities', 'Others'];
 const PAYMENT_MODES = ['upi', 'card', 'cash'];
 
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 const AddExpense = ({ navigation, route }: { navigation: any, route?: any }) => {
     const editExpense = route?.params?.editExpense;
@@ -32,6 +33,8 @@ const AddExpense = ({ navigation, route }: { navigation: any, route?: any }) => 
     const [lineItems, setLineItems] = useState<{ name: string; price: number }[]>(editExpense?.line_items || []);
     const [gstDetails, setGstDetails] = useState<{ cgst: number; sgst: number; igst: number; total_gst: number } | null>(editExpense?.gst_details || null);
     const [bulkExpenses, setBulkExpenses] = useState<any[]>([]);
+    const [date, setDate] = useState(editExpense?.date ? new Date(editExpense.date) : new Date());
+    const [showDatePicker, setShowDatePicker] = useState(false);
 
     // If editExpense changes (e.g. navigating between different edits), reset state
     React.useEffect(() => {
@@ -47,6 +50,7 @@ const AddExpense = ({ navigation, route }: { navigation: any, route?: any }) => 
             setImage(editExpense.receipt_image_base64 || null);
             setLineItems(editExpense.line_items || []);
             setGstDetails(editExpense.gst_details || null);
+            setDate(new Date(editExpense.date));
         }
     }, [editExpense]);
 
@@ -73,11 +77,17 @@ const AddExpense = ({ navigation, route }: { navigation: any, route?: any }) => 
                 setTaxAmount(response.data.tax_amount.toString());
                 setTaxType(response.data.tax_type || 'GST');
             }
+            if (response.data.scanned_image) {
+                setImage(response.data.scanned_image);
+            }
             if (response.data.line_items) {
                 setLineItems(response.data.line_items);
             }
             if (response.data.gst_details) {
                 setGstDetails(response.data.gst_details);
+            }
+            if (response.data.date) {
+                setDate(new Date(response.data.date));
             }
         } catch (error) {
             console.error('Failed to parse receipt', error);
@@ -98,6 +108,9 @@ const AddExpense = ({ navigation, route }: { navigation: any, route?: any }) => 
                 setDescription(response.data.description);
             }
             setPaymentMode('upi'); // SMS transactions are usually UPI/Cards, but default to upi for now
+            if (response.data.date) {
+                setDate(new Date(response.data.date));
+            }
             setSmsText('');
             Alert.alert('Magic!', 'Expense details extracted from SMS');
         } catch (error) {
@@ -198,6 +211,13 @@ const AddExpense = ({ navigation, route }: { navigation: any, route?: any }) => 
         }
     };
 
+    const onDateChange = (event: any, selectedDate?: Date) => {
+        setShowDatePicker(Platform.OS === 'ios');
+        if (selectedDate) {
+            setDate(selectedDate);
+        }
+    };
+
     const handleSubmit = async () => {
         if (!amount) {
             Alert.alert('Error', 'Please enter an amount');
@@ -208,7 +228,7 @@ const AddExpense = ({ navigation, route }: { navigation: any, route?: any }) => 
         try {
             const payload = {
                 amount: parseFloat(amount) || 0,
-                date: editExpense?.date || new Date().toISOString(),
+                date: date.toISOString(),
                 category,
                 payment_mode: paymentMode,
                 tax_amount: parseFloat(taxAmount) || 0,
@@ -231,16 +251,22 @@ const AddExpense = ({ navigation, route }: { navigation: any, route?: any }) => 
                 Alert.alert('Success', 'Expense added!');
             }
 
-            // Reset only if not editing or navigate back
-            if (!editExpense) {
-                setAmount('');
-                setDescription('');
-                setVendor('');
-                setItems([]);
-                setLineItems([]);
-                setGstDetails(null);
-                setImage(null);
-            }
+            // Always reset state after save
+            setAmount('');
+            setDescription('');
+            setVendor('');
+            setItems([]);
+            setLineItems([]);
+            setGstDetails(null);
+            setImage(null);
+            setCategory(CATEGORIES[0]);
+            setPaymentMode(PAYMENT_MODES[0]);
+            setTaxAmount('0.00');
+            setTaxType(null);
+            setDate(new Date());
+
+            // Clear the edit parameter so it doesn't open in edit mode next time
+            navigation.setParams({ editExpense: undefined });
 
             navigation.navigate('Home', { refresh: true });
         } catch (error) {
@@ -365,6 +391,59 @@ const AddExpense = ({ navigation, route }: { navigation: any, route?: any }) => 
                 )}
 
                 <View style={styles.section}>
+                    <Text style={styles.label}>Date Of Transaction</Text>
+                    <TouchableOpacity
+                        style={styles.inputContainer}
+                        onPress={() => setShowDatePicker(true)}
+                        activeOpacity={0.7}
+                    >
+                        <Calendar color={COLORS.primary} size={18} />
+                        <Text style={styles.dateText}>
+                            {date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        </Text>
+                    </TouchableOpacity>
+
+                    {showDatePicker && (
+                        Platform.OS === 'ios' ? (
+                            <Modal transparent animationType="slide" visible={showDatePicker}>
+                                <View style={styles.modalOverlay}>
+                                    <View style={styles.datePickerModal}>
+                                        <View style={styles.modalHeader}>
+                                            <Text style={styles.modalTitle}>Select Date</Text>
+                                            <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                                                <XCircle color={COLORS.primary} size={24} />
+                                            </TouchableOpacity>
+                                        </View>
+                                        <DateTimePicker
+                                            value={date}
+                                            mode="date"
+                                            display="spinner"
+                                            onChange={onDateChange}
+                                            maximumDate={new Date()}
+                                            textColor="white"
+                                        />
+                                        <TouchableOpacity
+                                            style={styles.modalButton}
+                                            onPress={() => setShowDatePicker(false)}
+                                        >
+                                            <Text style={styles.modalButtonText}>Done</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            </Modal>
+                        ) : (
+                            <DateTimePicker
+                                value={date}
+                                mode="date"
+                                display="default"
+                                onChange={onDateChange}
+                                maximumDate={new Date()}
+                            />
+                        )
+                    )}
+                </View>
+
+                <View style={[styles.section, { marginTop: -10 }]}>
                     <Text style={styles.label}>Vendor, Category & Mode</Text>
                     <TextInput
                         style={styles.input}
@@ -525,12 +604,40 @@ const styles = StyleSheet.create({
         marginTop: 10,
     },
     inputCard: {
-        backgroundColor: COLORS.card,
+        backgroundColor: COLORS.surface,
         borderRadius: 24,
-        padding: 30,
-        marginBottom: 35,
+        padding: 24,
+        marginBottom: 24,
         borderWidth: 1,
         borderColor: '#111',
+    },
+    inputContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: COLORS.background,
+        borderRadius: 16,
+        paddingHorizontal: 16,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#111',
+    },
+    dateText: {
+        flex: 1,
+        color: COLORS.text,
+        fontSize: 16,
+        paddingVertical: 18,
+        paddingLeft: 12,
+        fontWeight: 'bold',
+    },
+    datePickerModal: {
+        backgroundColor: COLORS.card,
+        borderTopLeftRadius: 32,
+        borderTopRightRadius: 32,
+        padding: 30,
+        paddingBottom: 50,
+        borderWidth: 1,
+        borderColor: '#222',
+        width: '100%',
     },
     amountHeader: {
         flexDirection: 'row',
@@ -789,6 +896,41 @@ const styles = StyleSheet.create({
     taxInfoText: {
         color: COLORS.text,
         fontSize: 13,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.8)',
+        justifyContent: 'flex-end',
+        alignItems: 'center',
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 20,
+        width: '100%',
+    },
+    modalTitle: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: COLORS.text,
+        textTransform: 'uppercase',
+        letterSpacing: 2,
+    },
+    modalButton: {
+        backgroundColor: COLORS.primary,
+        padding: 18,
+        borderRadius: 16,
+        alignItems: 'center',
+        marginTop: 20,
+        width: '100%',
+    },
+    modalButtonText: {
+        color: '#000',
+        fontSize: 14,
+        fontWeight: 'bold',
+        textTransform: 'uppercase',
+        letterSpacing: 1,
     },
 });
 

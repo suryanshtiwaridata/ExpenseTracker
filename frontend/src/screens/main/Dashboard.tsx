@@ -129,9 +129,6 @@ const Dashboard = ({ navigation }: { navigation: any }) => {
                         <Text style={styles.greeting}>{getGreeting()},</Text>
                         <Text style={styles.userName}>{user?.name?.split(' ')[0] || 'Suryansh'}</Text>
                     </View>
-                    <TouchableOpacity style={styles.notificationButton}>
-                        <View style={styles.dot} />
-                    </TouchableOpacity>
                 </View>
 
                 <ScrollView
