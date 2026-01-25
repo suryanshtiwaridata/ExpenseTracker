@@ -31,6 +31,33 @@ async def create_expense(expense: ExpenseCreate, current_user: dict = Depends(ge
     expense_dict["user_id"] = current_user["id"]
     expense_dict["created_at"] = datetime.utcnow()
     
+    # ML Learning: Capture Feedback
+    if expense.original_ocr_data and expense.vendor:
+        original = expense.original_ocr_data
+        discrepancies = {}
+        
+        # Check for core field discrepancies
+        if original.get("amount") != expense.amount:
+            discrepancies["amount"] = {"original": original.get("amount"), "corrected": expense.amount}
+        
+        if original.get("gst_details"):
+            orig_gst = original["gst_details"]
+            new_gst = expense.gst_details or {}
+            for key in ["cgst", "sgst", "igst", "total_gst"]:
+                if orig_gst.get(key) != new_gst.get(key):
+                    if "gst_details" not in discrepancies: discrepancies["gst_details"] = {}
+                    discrepancies["gst_details"][key] = {"original": orig_gst.get(key), "corrected": new_gst.get(key)}
+
+        if discrepancies:
+            learning_entry = {
+                "id": str(uuid.uuid4()),
+                "vendor": expense.vendor.upper(),
+                "raw_text": original.get("raw_text"),
+                "discrepancies": discrepancies,
+                "created_at": datetime.utcnow()
+            }
+            await db.ocr_learning.insert_one(learning_entry)
+
     await db.expenses.insert_one(expense_dict)
     return expense_dict
 
@@ -79,7 +106,7 @@ async def parse_receipt(payload: dict, current_user: dict = Depends(get_current_
     if not image_base64:
         raise HTTPException(status_code=400, detail="No image provided")
     
-    data = extract_receipt_data(image_base64)
+    data = await extract_receipt_data(image_base64, db=db)
     return data
 
 @router.post("/parse-sms")

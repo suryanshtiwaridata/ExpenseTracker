@@ -41,6 +41,8 @@ class ExpenseBase(BaseModel):
     items: Optional[List[str]] = None
     line_items: Optional[List[dict]] = None
     gst_details: Optional[dict] = None
+    original_ocr_data: Optional[dict] = None
+    is_tax_deductible: bool = False
     source: ExpenseSource = ExpenseSource.MANUAL
     currency: str = "INR"
 

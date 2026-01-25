@@ -3,7 +3,7 @@ import { useStore } from '../store/useStore';
 
 const client = axios.create({
     baseURL: 'http://192.168.1.48:8000/api', // Updated to use current local IP
-    timeout: 5000,
+    timeout: 15000,
 });
 
 client.interceptors.request.use((config) => {

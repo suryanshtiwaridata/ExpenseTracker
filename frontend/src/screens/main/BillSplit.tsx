@@ -111,7 +111,7 @@ const BillSplit = ({ navigation, route }: { navigation: any, route: any }) => {
 
                 <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
                     <Share2 color="#000" size={20} />
-                    <Text style={styles.shareButtonText}>Share Beautiful Card</Text>
+                    <Text style={styles.shareButtonText}>Share Card</Text>
                 </TouchableOpacity>
 
                 <Text style={styles.tipText}>Tip: Swipe on the card to change styles (Coming Soon)</Text>

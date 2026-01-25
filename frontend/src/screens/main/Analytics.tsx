@@ -4,13 +4,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../theme/colors';
 import { PieChart } from 'react-native-gifted-charts';
 import { useStore } from '../../store/useStore';
-import { ChevronLeft, ChevronRight, CreditCard as CardIcon } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, CreditCard as CardIcon, ShieldCheck, Receipt, PieChart as PieIcon, TrendingUp, Info } from 'lucide-react-native';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
 
 const Analytics = () => {
     const { expenses } = useStore();
     const [chartData, setChartData] = useState<any[]>([]);
-    const [groupBy, setGroupBy] = useState<'category' | 'mode' | 'calendar'>('category');
+    const [groupBy, setGroupBy] = useState<'category' | 'mode' | 'calendar' | 'tax'>('category');
     const [selectedMonth, setSelectedMonth] = useState(new Date());
 
     const monthlyStats = useMemo(() => {
@@ -50,6 +50,25 @@ const Analytics = () => {
 
         setChartData(data);
     }, [expenses, groupBy, selectedMonth]);
+
+    const taxSummary = useMemo(() => {
+        const filteredExpenses = expenses.filter(exp => isSameMonth(new Date(exp.date), selectedMonth));
+        const deductibleTotal = filteredExpenses
+            .filter(exp => exp.is_tax_deductible)
+            .reduce((acc, curr) => acc + curr.amount, 0);
+
+        const gst = filteredExpenses.reduce((acc, curr) => {
+            if (curr.gst_details) {
+                acc.cgst += curr.gst_details.cgst || 0;
+                acc.sgst += curr.gst_details.sgst || 0;
+                acc.igst += curr.gst_details.igst || 0;
+                acc.total += curr.gst_details.total_gst || 0;
+            }
+            return acc;
+        }, { cgst: 0, sgst: 0, igst: 0, total: 0 });
+
+        return { deductibleTotal, gst };
+    }, [expenses, selectedMonth]);
 
     const monthTotalSpent = useMemo(() => {
         return expenses
@@ -106,14 +125,14 @@ const Analytics = () => {
             </View>
 
             <View style={styles.filterContainer}>
-                {(['category', 'mode', 'calendar'] as const).map((filter) => (
+                {(['category', 'mode', 'calendar', 'tax'] as const).map((filter) => (
                     <TouchableOpacity
                         key={filter}
                         style={[styles.filterButton, groupBy === filter && styles.filterButtonActive]}
                         onPress={() => setGroupBy(filter)}
                     >
                         <Text style={[styles.filterText, groupBy === filter && styles.filterTextActive]}>
-                            {filter === 'calendar' ? 'CALENDAR' : filter.toUpperCase()}
+                            {filter.toUpperCase()}
                         </Text>
                     </TouchableOpacity>
                 ))}
@@ -122,6 +141,55 @@ const Analytics = () => {
             <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
                 {groupBy === 'calendar' ? (
                     <CalendarView expenses={expenses} selectedMonth={selectedMonth} onMonthChange={setSelectedMonth} />
+                ) : groupBy === 'tax' ? (
+                    <View style={styles.taxSummarySection}>
+                        <View style={styles.taxHeaderRow}>
+                            <ShieldCheck color={COLORS.success} size={24} />
+                            <Text style={styles.taxSectionTitle}>Tax & Audit Summary</Text>
+                        </View>
+
+                        <View style={styles.taxStatsGrid}>
+                            <View style={styles.taxStatCard}>
+                                <Text style={styles.taxStatLabel}>TAX DEDUCTIBLE</Text>
+                                <Text style={styles.taxStatValue}>₹{taxSummary.deductibleTotal.toLocaleString()}</Text>
+                                <View style={styles.taxStatProgress}>
+                                    <View style={[styles.taxStatFill, { width: `${(taxSummary.deductibleTotal / (monthTotalSpent || 1)) * 100}%`, backgroundColor: COLORS.success }]} />
+                                </View>
+                            </View>
+                            <View style={styles.taxStatCard}>
+                                <Text style={styles.taxStatLabel}>TOTAL GST PAID</Text>
+                                <Text style={styles.taxStatValue}>₹{taxSummary.gst.total.toLocaleString()}</Text>
+                                <View style={styles.taxStatProgress}>
+                                    <View style={[styles.taxStatFill, { width: `${(taxSummary.gst.total / (monthTotalSpent || 1)) * 100}%`, backgroundColor: COLORS.primary }]} />
+                                </View>
+                            </View>
+                        </View>
+
+                        <Text style={styles.sectionLabel}>GST Breakdown</Text>
+                        <View style={styles.gstBreakdownCard}>
+                            <View style={styles.gstItem}>
+                                <Text style={styles.gstItemLabel}>CGST</Text>
+                                <Text style={styles.gstItemValue}>₹{taxSummary.gst.cgst.toLocaleString()}</Text>
+                            </View>
+                            <View style={styles.gstSeparator} />
+                            <View style={styles.gstItem}>
+                                <Text style={styles.gstItemLabel}>SGST</Text>
+                                <Text style={styles.gstItemValue}>₹{taxSummary.gst.sgst.toLocaleString()}</Text>
+                            </View>
+                            <View style={styles.gstSeparator} />
+                            <View style={styles.gstItem}>
+                                <Text style={styles.gstItemLabel}>IGST</Text>
+                                <Text style={styles.gstItemValue}>₹{taxSummary.gst.igst.toLocaleString()}</Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.auditInfoBox}>
+                            <Info color={COLORS.textSecondary} size={16} />
+                            <Text style={styles.auditInfoText}>
+                                All amounts are based on current month's transactions tagged as tax deductible or containing GST info.
+                            </Text>
+                        </View>
+                    </View>
                 ) : chartData.length > 0 ? (
                     <View style={styles.chartSection}>
                         <View style={styles.chartWrapper}>
@@ -505,6 +573,100 @@ const styles = StyleSheet.create({
         color: COLORS.text,
         fontSize: 16,
         fontWeight: 'bold',
+    },
+    taxSummarySection: {
+        marginTop: 10,
+    },
+    taxHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        marginBottom: 25,
+    },
+    taxSectionTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: COLORS.text,
+    },
+    taxStatsGrid: {
+        flexDirection: 'row',
+        gap: 15,
+        marginBottom: 30,
+    },
+    taxStatCard: {
+        flex: 1,
+        backgroundColor: COLORS.card,
+        padding: 20,
+        borderRadius: 24,
+        borderWidth: 1,
+        borderColor: '#111',
+    },
+    taxStatLabel: {
+        fontSize: 9,
+        fontWeight: 'bold',
+        color: COLORS.textSecondary,
+        letterSpacing: 1,
+        marginBottom: 8,
+    },
+    taxStatValue: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: COLORS.text,
+        marginBottom: 12,
+    },
+    taxStatProgress: {
+        height: 4,
+        backgroundColor: '#111',
+        borderRadius: 2,
+        overflow: 'hidden',
+    },
+    taxStatFill: {
+        height: '100%',
+        borderRadius: 2,
+    },
+    gstBreakdownCard: {
+        backgroundColor: COLORS.card,
+        borderRadius: 24,
+        padding: 24,
+        borderWidth: 1,
+        borderColor: '#111',
+        marginBottom: 20,
+    },
+    gstItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 12,
+    },
+    gstItemLabel: {
+        color: COLORS.textSecondary,
+        fontSize: 14,
+        fontWeight: '500',
+    },
+    gstItemValue: {
+        color: COLORS.text,
+        fontSize: 14,
+        fontWeight: 'bold',
+    },
+    gstSeparator: {
+        height: 1,
+        backgroundColor: '#111',
+    },
+    auditInfoBox: {
+        flexDirection: 'row',
+        gap: 12,
+        padding: 16,
+        backgroundColor: 'rgba(255, 255, 255, 0.02)',
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#111',
+        marginTop: 10,
+    },
+    auditInfoText: {
+        flex: 1,
+        fontSize: 11,
+        color: COLORS.textSecondary,
+        lineHeight: 16,
     },
     noTransactionsText: {
         color: COLORS.textSecondary,

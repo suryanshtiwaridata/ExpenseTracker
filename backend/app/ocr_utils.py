@@ -3,12 +3,26 @@ from PIL import Image, ImageOps, ImageEnhance
 import io
 import re
 import base64
+import os
+
+LOG_FILE = "/Users/suryansh/ExpenseTracker/ExpenseTracker/backend/ocr_debug.log"
+
+def log_debug(msg):
+    with open(LOG_FILE, "a") as f:
+        f.write(f"{msg}\n")
 
 def preprocess_image(image: Image.Image) -> Image.Image:
     """
     Simulates a document scanner effect by converting to grayscale,
     increasing contrast, and sharpening.
     """
+    # Resize if too large (improves OCR speed and prevents timeouts)
+    max_size = 1280
+    if max(image.size) > max_size:
+        ratio = max_size / max(image.size)
+        new_size = (int(image.size[0] * ratio), int(image.size[1] * ratio))
+        image = image.resize(new_size, Image.Resampling.LANCZOS)
+    
     # Convert to grayscale
     image = ImageOps.grayscale(image)
     
@@ -22,13 +36,11 @@ def preprocess_image(image: Image.Image) -> Image.Image:
     
     return image
 
-def extract_receipt_data(image_base64: str):
-    """
-    Extracts total amount and date from a base64 encoded receipt image.
-    Also returns a preprocessed "scanned" version of the image.
-    """
+async def extract_receipt_data(image_base64: str, db=None):
+    log_debug("extract_receipt_data started")
     try:
         # Decode base64 image
+        log_debug("Decoding base64...")
         image_data = base64.decodebytes(image_base64.encode('utf-8'))
         image = Image.open(io.BytesIO(image_data))
         
@@ -41,7 +53,9 @@ def extract_receipt_data(image_base64: str):
         scanned_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
         
         # Perform OCR on the preprocessed image
+        log_debug("Starting Tesseract...")
         text = pytesseract.image_to_string(scanned_image)
+        log_debug(f"Tesseract complete. Text length: {len(text)}")
         
         # Regex patterns for total amount
         # Looks for "Total", "Grand Total", POS "Sale", etc.
@@ -105,8 +119,8 @@ def extract_receipt_data(image_base64: str):
                     price = float(price_str)
                     # Clean up the line to get the item description
                     item_desc = re.sub(r"\s*[\d,]+\.\d{2}.*$", "", line).strip()
-                    # Skip common labels
-                    if item_desc and len(item_desc) > 2 and not any(kw in item_desc.upper() for kw in ["TOTAL", "SUBTOTAL", "TAX", "GST", "VAT", "CHANGE", "CASH", "CARD", "SALE", "BASE", "AUTH", "TIP"]):
+                    # Skip common labels but INCLUDE specific tax rows if found
+                    if item_desc and len(item_desc) > 2 and not any(kw in item_desc.upper() for kw in ["TOTAL", "SUBTOTAL", "VAT", "CHANGE", "CASH", "CARD", "SALE", "BASE", "AUTH", "TIP"]):
                         items.append(item_desc)
                         line_items.append({"name": item_desc, "price": price})
                 except ValueError:
@@ -141,10 +155,10 @@ def extract_receipt_data(image_base64: str):
         gst_details = {"cgst": 0.0, "sgst": 0.0, "igst": 0.0, "total_gst": 0.0}
         
         gst_patterns = {
-            "cgst": r"CGST\s*[:\-\s]*\s*(?:INR|RS|₹)?\s*([\d,]+\.\d{2})",
-            "sgst": r"SGST\s*[:\-\s]*\s*(?:INR|RS|₹)?\s*([\d,]+\.\d{2})",
-            "igst": r"IGST\s*[:\-\s]*\s*(?:INR|RS|₹)?\s*([\d,]+\.\d{2})",
-            "total_gst": r"(?:TOTAL\s+)?GST\s*[:\-\s]*\s*(?:INR|RS|₹)?\s*([\d,]+\.\d{2})"
+            "cgst": r"(?:C\.?G\.?S\.?T\.?|CSGT)\s*(?:@\s*[\d.]+\s*%)?\s*[:\-\s]*\s*(?:INR|RS|₹)?\s*([\d,]+\.\d{1,2})",
+            "sgst": r"(?:S\.?G\.?S\.?T\.?|UTGST)\s*(?:@\s*[\d.]+\s*%)?\s*[:\-\s]*\s*(?:INR|RS|₹)?\s*([\d,]+\.\d{1,2})",
+            "igst": r"I\.?G\.?S\.?T\.?\s*(?:@\s*[\d.]+\s*%)?\s*[:\-\s]*\s*(?:INR|RS|₹)?\s*([\d,]+\.\d{1,2})",
+            "total_gst": r"(?:TOTAL\s+)?(?:GST|TAX)\s*(?:@\s*[\d.]+\s*%)?\s*[:\-\s]*\s*(?:INR|RS|₹)?\s*([\d,]+\.\d{1,2})"
         }
 
         for key, pattern in gst_patterns.items():
@@ -156,11 +170,37 @@ def extract_receipt_data(image_base64: str):
                     continue
         
         # Fallback for total_gst if only components found
-        if gst_details["total_gst"] == 0 and (gst_details["cgst"] > 0 or gst_details["sgst"] > 0):
-            gst_details["total_gst"] = gst_details["cgst"] + gst_details["sgst"]
+        if gst_details["total_gst"] == 0:
+            gst_details["total_gst"] = gst_details["cgst"] + gst_details["sgst"] + gst_details["igst"]
             
         tax_amount = gst_details["total_gst"]
+        # If no specific GST categories found, but "TAX" or "GST" amount exists
+        if tax_amount == 0:
+            tax_match = re.search(r"(?:TAX|GST)\s*[:\-\s]*\s*(?:INR|RS|₹)?\s*([\d,]+\.\d{1,2})", text, re.IGNORECASE)
+            if tax_match:
+                tax_amount = float(tax_match.group(1).replace(",", ""))
+                gst_details["total_gst"] = tax_amount
+        
         tax_type = "GST" if tax_amount > 0 else None
+            
+        # ML Learning: Apply Previous Corrections
+        if db is not None and vendor:
+            log_debug(f"Checking learning DB for vendor: {vendor}")
+            try:
+                # Look for most recent corrections for this vendor
+                prev_corrections = await db.ocr_learning.find({"vendor": vendor.upper()}).sort("created_at", -1).to_list(length=5)
+                log_debug(f"Found {len(prev_corrections)} previous corrections")
+                if prev_corrections:
+                    # If we found corrections, we could use them for smarter regex or direct replacement
+                    # For now, let's just flag higher accuracy if we see consistent manual overrides
+                    for entry in prev_corrections:
+                        disc = entry.get("discrepancies", {})
+                        if "amount" in disc and amount == disc["amount"]["original"]:
+                            # The OCR misread the amount in a predictable way before!
+                            # amount = disc["amount"]["corrected"] # High risk to auto-apply, better to flag
+                            pass
+            except Exception as e:
+                print(f"Learning Lookup Error: {e}")
             
         # Date extraction
         date_patterns = [
@@ -215,10 +255,17 @@ def extract_receipt_data(image_base64: str):
             "tax_type": tax_type,
             "gst_details": gst_details,
             "scanned_image": scanned_base64,
-            "raw_text": text[:1500]
+            "raw_text": text[:1500],
+            "confidence_scores": {
+                "amount": 0.9 if amount else 0.3,
+                "vendor": 0.8 if vendor else 0.2,
+                "gst": 0.9 if gst_details["total_gst"] > 0 else 0.5
+            }
         }
     except Exception as e:
-        print(f"OCR Error: {e}")
+        log_debug(f"CRITICAL OCR ERROR: {str(e)}")
+        import traceback
+        log_debug(traceback.format_exc())
         return {
             "amount": None, 
             "description": "Error parsing receipt", 

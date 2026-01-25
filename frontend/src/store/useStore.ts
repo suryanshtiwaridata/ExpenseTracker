@@ -23,6 +23,7 @@ interface Expense {
     payment_mode?: string;
     tax_amount?: number;
     tax_type?: string;
+    is_tax_deductible: boolean;
     currency: string;
 }
 
