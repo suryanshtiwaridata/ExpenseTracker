@@ -7,7 +7,10 @@ import { COLORS } from '../../theme/colors';
 import { LogOut, User as UserIcon, Settings, Bell, Shield, Lock, ChevronRight, X, Smartphone, Fingerprint, PieChart } from 'lucide-react-native';
 import client from '../../api/client';
 import * as LocalAuthentication from 'expo-local-authentication';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import { requestNotificationPermissions } from '../../utils/notifications';
+import { FileText, Download } from 'lucide-react-native';
 
 const Profile = ({ navigation }: { navigation: any }) => {
     const { user, logout, expenses, biometricsEnabled, setBiometricsEnabled, setUser } = useStore();
@@ -25,6 +28,13 @@ const Profile = ({ navigation }: { navigation: any }) => {
     const [updatePhone, setUpdatePhone] = useState(user?.phone || '');
     const [updateLoading, setUpdateLoading] = useState(false);
 
+    // Export Reports state
+    const [exportModalVisible, setExportModalVisible] = useState(false);
+    const [exportLoading, setExportLoading] = useState(false);
+    const [exportYear, setExportYear] = useState(new Date().getFullYear().toString());
+    const [exportMonth, setExportMonth] = useState((new Date().getMonth() + 1).toString());
+    const [exportFormat, setExportFormat] = useState('pdf'); // 'pdf' or 'csv'
+
     const isFocused = useIsFocused();
 
     // Reset modals to default (closed) when screen is focused
@@ -33,6 +43,7 @@ const Profile = ({ navigation }: { navigation: any }) => {
             setResetModalVisible(false);
             setProfileModalVisible(false);
             setPrivacyModalVisible(false);
+            setExportModalVisible(false);
         }
     }, [isFocused]);
 
@@ -133,6 +144,49 @@ const Profile = ({ navigation }: { navigation: any }) => {
         }
     };
 
+    const handleExport = async () => {
+        setExportLoading(true);
+        try {
+            const fileName = exportFormat === 'pdf'
+                ? `statement_${exportYear}_${exportMonth}.pdf`
+                : `expenses_${exportYear}_${exportMonth}.csv`;
+
+            const fileUri = `${(FileSystem as any).documentDirectory}${fileName}`;
+            const downloadUrl = `${client.defaults.baseURL}/reports/${exportFormat}?month=${exportMonth}&year=${exportYear}`;
+
+            const token = useStore.getState().token;
+
+            const downloadResumable = FileSystem.createDownloadResumable(
+                downloadUrl,
+                fileUri,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                }
+            );
+
+            const downloadRes = await downloadResumable.downloadAsync();
+
+            if (!downloadRes || downloadRes.status !== 200) {
+                throw new Error('Failed to download report');
+            }
+
+            if (!(await Sharing.isAvailableAsync())) {
+                Alert.alert('Error', 'Sharing is not available on this device');
+                return;
+            }
+
+            await Sharing.shareAsync(fileUri);
+            setExportModalVisible(false);
+        } catch (error: any) {
+            console.error('Export failed', error);
+            Alert.alert('Error', 'Failed to generate report. Please try again.');
+        } finally {
+            setExportLoading(false);
+        }
+    };
+
     const MenuItem = ({ icon: Icon, title, onPress, color = COLORS.text, rightElement = null }: { icon: any, title: string, onPress?: () => void, color?: string, rightElement?: React.ReactNode }) => (
         <TouchableOpacity style={styles.menuItem} onPress={onPress} disabled={!onPress}>
             <View style={styles.menuItemLeft}>
@@ -215,6 +269,12 @@ const Profile = ({ navigation }: { navigation: any }) => {
                         title="Monthly Budgeting"
                         onPress={() => navigation.navigate('BudgetSettings')}
                         color={COLORS.primary}
+                    />
+
+                    <MenuItem
+                        icon={FileText}
+                        title="Export Reports"
+                        onPress={() => setExportModalVisible(true)}
                     />
 
                     <MenuItem
@@ -351,6 +411,71 @@ const Profile = ({ navigation }: { navigation: any }) => {
                         </ScrollView>
                         <TouchableOpacity style={[styles.modalButton, { marginTop: 20 }]} onPress={() => setPrivacyModalVisible(false)}>
                             <Text style={styles.modalButtonText}>Close</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Export Reports Modal */}
+            <Modal animationType="slide" transparent={true} visible={exportModalVisible} onRequestClose={() => setExportModalVisible(false)}>
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Export Reports</Text>
+                            <TouchableOpacity onPress={() => setExportModalVisible(false)}>
+                                <X color={COLORS.text} size={24} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <Text style={styles.modalLabel}>Select Year</Text>
+                        <TextInput
+                            style={styles.modalInput}
+                            value={exportYear}
+                            onChangeText={setExportYear}
+                            keyboardType="numeric"
+                            placeholder="2026"
+                            placeholderTextColor={COLORS.textSecondary}
+                        />
+
+                        <Text style={styles.modalLabel}>Select Month (1-12)</Text>
+                        <TextInput
+                            style={styles.modalInput}
+                            value={exportMonth}
+                            onChangeText={setExportMonth}
+                            keyboardType="numeric"
+                            placeholder="1"
+                            placeholderTextColor={COLORS.textSecondary}
+                        />
+
+                        <Text style={styles.modalLabel}>Format</Text>
+                        <View style={styles.formatContainer}>
+                            <TouchableOpacity
+                                style={[styles.formatButton, exportFormat === 'pdf' && styles.formatButtonActive]}
+                                onPress={() => setExportFormat('pdf')}
+                            >
+                                <Text style={[styles.formatButtonText, exportFormat === 'pdf' && styles.formatButtonTextActive]}>PDF STATEMENT</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.formatButton, exportFormat === 'csv' && styles.formatButtonActive]}
+                                onPress={() => setExportFormat('csv')}
+                            >
+                                <Text style={[styles.formatButtonText, exportFormat === 'csv' && styles.formatButtonTextActive]}>CSV DATA</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <TouchableOpacity
+                            style={[styles.modalButton, (exportLoading || !exportMonth || !exportYear) && { opacity: 0.7 }]}
+                            onPress={handleExport}
+                            disabled={exportLoading || !exportMonth || !exportYear}
+                        >
+                            {exportLoading ? (
+                                <ActivityIndicator color="#000" />
+                            ) : (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                    <Download color="#000" size={18} />
+                                    <Text style={styles.modalButtonText}>GENERATE & SHARE</Text>
+                                </View>
+                            )}
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -530,6 +655,33 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: COLORS.textSecondary,
         lineHeight: 22,
+    },
+    formatContainer: {
+        flexDirection: 'row',
+        gap: 15,
+        marginBottom: 30,
+    },
+    formatButton: {
+        flex: 1,
+        padding: 15,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: '#111',
+        alignItems: 'center',
+        backgroundColor: COLORS.background,
+    },
+    formatButtonActive: {
+        borderColor: COLORS.primary,
+        backgroundColor: 'rgba(0, 209, 255, 0.05)',
+    },
+    formatButtonText: {
+        color: COLORS.textSecondary,
+        fontSize: 10,
+        fontWeight: 'bold',
+        letterSpacing: 1,
+    },
+    formatButtonTextActive: {
+        color: COLORS.primary,
     },
 });
 

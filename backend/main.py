@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routers import auth, expenses, budgets
+from app.routers import auth, expenses, budgets, reports
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="Expense Tracker API")
@@ -15,6 +15,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api")
 app.include_router(expenses.router, prefix="/api")
 app.include_router(budgets.router, prefix="/api")
+app.include_router(reports.router, prefix="/api")
 
 @app.on_event("startup")
 async def startup_db_client():
