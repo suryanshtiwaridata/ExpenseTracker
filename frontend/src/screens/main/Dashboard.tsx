@@ -5,7 +5,7 @@ import { COLORS } from '../../theme/colors';
 import client from '../../api/client';
 import { useStore } from '../../store/useStore';
 import { useFocusEffect } from '@react-navigation/native';
-import { TrendingUp, ArrowUpRight, ArrowDownLeft, ShoppingBag, Coffee, Car, Utensils, Trash2, Edit2, ChevronDown, ChevronRight, PieChart, AlertTriangle, Sun, Sunrise, MoonStar } from 'lucide-react-native';
+import { TrendingUp, ArrowUpRight, ArrowDownLeft, ShoppingBag, Coffee, Car, Utensils, Trash2, Edit2, ChevronDown, ChevronRight, PieChart, AlertTriangle, Sun, Sunrise, MoonStar, Users } from 'lucide-react-native';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import { isSameMonth, format } from 'date-fns';
 
@@ -86,12 +86,20 @@ const Dashboard = ({ navigation }: { navigation: any }) => {
 
     const renderLeftActions = (expense: any) => {
         return (
-            <TouchableOpacity
-                style={styles.editAction}
-                onPress={() => navigation.navigate('Add', { editExpense: expense })}
-            >
-                <Edit2 color="white" size={24} />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row' }}>
+                <TouchableOpacity
+                    style={styles.editAction}
+                    onPress={() => navigation.navigate('Add', { editExpense: expense })}
+                >
+                    <Edit2 color="white" size={24} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={styles.splitAction}
+                    onPress={() => navigation.navigate('BillSplit', { expense })}
+                >
+                    <Users color="white" size={24} />
+                </TouchableOpacity>
+            </View>
         );
     };
 
@@ -244,9 +252,6 @@ const Dashboard = ({ navigation }: { navigation: any }) => {
                                         if (direction === 'right') {
                                             handleDeleteExpense(expense.id);
                                             swipeableRefs.current[expense.id]?.close();
-                                        } else if (direction === 'left') {
-                                            swipeableRefs.current[expense.id]?.close();
-                                            navigation.navigate('Add', { editExpense: expense });
                                         }
                                     }}
                                 >
@@ -511,6 +516,15 @@ const styles = StyleSheet.create({
     },
     editAction: {
         backgroundColor: COLORS.primary,
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: 80,
+        height: '84%',
+        borderRadius: 20,
+        marginRight: 10,
+    },
+    splitAction: {
+        backgroundColor: '#6C5CE7',
         justifyContent: 'center',
         alignItems: 'center',
         width: 80,

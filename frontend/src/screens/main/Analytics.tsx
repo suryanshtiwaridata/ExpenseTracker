@@ -4,24 +4,36 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../theme/colors';
 import { PieChart } from 'react-native-gifted-charts';
 import { useStore } from '../../store/useStore';
-import { ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, CreditCard as CardIcon } from 'lucide-react-native';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
 
 const Analytics = () => {
     const { expenses } = useStore();
     const [chartData, setChartData] = useState<any[]>([]);
-    const [groupBy, setGroupBy] = useState<'category' | 'month' | 'mode' | 'calendar'>('category');
+    const [groupBy, setGroupBy] = useState<'category' | 'mode' | 'calendar'>('category');
     const [selectedMonth, setSelectedMonth] = useState(new Date());
+
+    const monthlyStats = useMemo(() => {
+        const stats: Record<string, { date: Date, total: number }> = {};
+        expenses.forEach(exp => {
+            const date = new Date(exp.date);
+            const key = format(date, 'yyyy-MM');
+            if (!stats[key]) {
+                stats[key] = { date: startOfMonth(date), total: 0 };
+            }
+            stats[key].total += exp.amount;
+        });
+        return Object.values(stats).sort((a, b) => b.date.getTime() - a.date.getTime());
+    }, [expenses]);
 
     useEffect(() => {
         const groups: any = {};
+        const filteredExpenses = expenses.filter(exp => isSameMonth(new Date(exp.date), selectedMonth));
 
-        expenses.forEach((exp) => {
+        filteredExpenses.forEach((exp) => {
             let key = '';
             if (groupBy === 'category') {
                 key = exp.category;
-            } else if (groupBy === 'month') {
-                key = new Date(exp.date).toLocaleString('default', { month: 'short', year: '2-digit' });
             } else if (groupBy === 'mode') {
                 key = (exp.payment_mode || 'Manual').charAt(0).toUpperCase() + (exp.payment_mode || 'Manual').slice(1);
             }
@@ -37,15 +49,60 @@ const Analytics = () => {
         }));
 
         setChartData(data);
-    }, [expenses, groupBy]);
+    }, [expenses, groupBy, selectedMonth]);
 
-    const totalSpent = expenses.reduce((acc, curr) => acc + curr.amount, 0);
+    const monthTotalSpent = useMemo(() => {
+        return expenses
+            .filter(exp => isSameMonth(new Date(exp.date), selectedMonth))
+            .reduce((acc, curr) => acc + curr.amount, 0);
+    }, [expenses, selectedMonth]);
 
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <Text style={styles.title}>Analytics</Text>
                 <Text style={styles.subtitle}>Where is your money going?</Text>
+            </View>
+
+            <View style={{ marginBottom: 30 }}>
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.monthCardsContainer}
+                    snapToInterval={280 + 20}
+                    decelerationRate="fast"
+                >
+                    {monthlyStats.map((stat, index) => {
+                        const isSelected = isSameMonth(stat.date, selectedMonth);
+                        return (
+                            <TouchableOpacity
+                                key={index}
+                                style={[styles.monthCard, isSelected && styles.monthCardActive]}
+                                onPress={() => setSelectedMonth(stat.date)}
+                                activeOpacity={0.9}
+                            >
+                                <View style={styles.cardHeaderSmall}>
+                                    <View style={[styles.cardChip, isSelected && { backgroundColor: '#000' }]} />
+                                </View>
+
+                                <View style={styles.cardMain}>
+                                    <Text style={[styles.monthCardLabel, isSelected && styles.monthCardLabelActive]}>
+                                        {format(stat.date, 'MMMM').toUpperCase()}
+                                    </Text>
+                                    <Text style={[styles.monthCardAmount, isSelected && styles.monthCardAmountActive]}>
+                                        ₹{stat.total.toLocaleString()}
+                                    </Text>
+                                </View>
+
+                                <View style={styles.cardFooterSmall}>
+                                    <Text style={[styles.cardNumber, isSelected && { color: '#000', opacity: 0.5 }]}>
+                                        **** **** **** {format(stat.date, 'yyyy')}
+                                    </Text>
+                                </View>
+                            </TouchableOpacity>
+                        );
+                    })}
+                </ScrollView>
             </View>
 
             <View style={styles.filterContainer}>
@@ -79,7 +136,7 @@ const Analytics = () => {
                                 centerLabelComponent={() => (
                                     <View style={{ justifyContent: 'center', alignItems: 'center' }}>
                                         <Text style={{ fontSize: 20, color: 'white', fontWeight: 'bold' }}>
-                                            ₹{totalSpent.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                                            ₹{monthTotalSpent.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                                         </Text>
                                         <Text style={{ fontSize: 10, color: COLORS.textSecondary }}>Total Spent</Text>
                                     </View>
@@ -88,7 +145,7 @@ const Analytics = () => {
                         </View>
 
                         <Text style={styles.sectionLabel}>
-                            {groupBy === 'category' ? 'Category' : groupBy === 'month' ? 'Monthly' : 'Payment'} Breakdown
+                            {groupBy === 'category' ? 'Category' : 'Payment'} Breakdown
                         </Text>
                         <View style={styles.legend}>
                             {chartData.map((item, index) => (
@@ -100,7 +157,7 @@ const Analytics = () => {
                                     <View style={styles.legendRight}>
                                         <Text style={styles.legendValue}>₹{item.value.toLocaleString()}</Text>
                                         <Text style={styles.legendPercentage}>
-                                            {((item.value / totalSpent) * 100).toFixed(1)}%
+                                            {((item.value / monthTotalSpent) * 100).toFixed(1)}%
                                         </Text>
                                     </View>
                                 </View>
@@ -113,7 +170,7 @@ const Analytics = () => {
                     </View>
                 )}
             </ScrollView>
-        </SafeAreaView>
+        </SafeAreaView >
     );
 };
 
@@ -140,6 +197,76 @@ const styles = StyleSheet.create({
     content: {
         paddingHorizontal: 20,
         paddingBottom: 30,
+    },
+    monthCardsContainer: {
+        paddingHorizontal: 20,
+        gap: 20,
+    },
+    monthCard: {
+        backgroundColor: COLORS.card,
+        padding: 24,
+        borderRadius: 24,
+        width: 280,
+        height: 180,
+        borderWidth: 1,
+        borderColor: '#111',
+        justifyContent: 'space-between',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.3,
+        shadowRadius: 15,
+        elevation: 10,
+    },
+    monthCardActive: {
+        backgroundColor: COLORS.primary,
+        borderColor: COLORS.primary,
+    },
+    cardHeaderSmall: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    cardChip: {
+        width: 40,
+        height: 30,
+        backgroundColor: '#1a1a1a',
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: COLORS.primary + '33',
+    },
+    cardMain: {
+        marginTop: 10,
+    },
+    monthCardLabel: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: COLORS.textSecondary,
+        letterSpacing: 4,
+        marginBottom: 8,
+    },
+    monthCardLabelActive: {
+        color: '#000',
+        opacity: 0.8,
+    },
+    monthCardAmount: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: COLORS.text,
+        letterSpacing: -1,
+    },
+    monthCardAmountActive: {
+        color: '#000',
+    },
+    cardFooterSmall: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    cardNumber: {
+        fontSize: 10,
+        color: COLORS.textSecondary,
+        letterSpacing: 2,
+        fontFamily: 'Courier',
     },
     filterContainer: {
         flexDirection: 'row',

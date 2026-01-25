@@ -15,6 +15,7 @@ import BudgetSettings from '../screens/main/BudgetSettings';
 import Login from '../screens/auth/Login';
 import Register from '../screens/auth/Register';
 import ReceiptGallery from '../screens/main/ReceiptGallery';
+import BillSplit from '../screens/main/BillSplit';
 
 const Tab = createMaterialTopTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -87,6 +88,7 @@ const MainStack = () => (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="MainTabs" component={TabNavigator} />
         <Stack.Screen name="BudgetSettings" component={BudgetSettings} />
+        <Stack.Screen name="BillSplit" component={BillSplit} />
     </Stack.Navigator>
 );
 
