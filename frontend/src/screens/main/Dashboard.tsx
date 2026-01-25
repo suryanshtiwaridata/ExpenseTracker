@@ -5,7 +5,7 @@ import { COLORS } from '../../theme/colors';
 import client from '../../api/client';
 import { useStore } from '../../store/useStore';
 import { useFocusEffect } from '@react-navigation/native';
-import { TrendingUp, ArrowUpRight, ArrowDownLeft, ShoppingBag, Coffee, Car, Utensils, Trash2, Edit2, ChevronDown, ChevronRight } from 'lucide-react-native';
+import { TrendingUp, ArrowUpRight, ArrowDownLeft, ShoppingBag, Coffee, Car, Utensils, Trash2, Edit2, ChevronDown, ChevronRight, PieChart, AlertTriangle } from 'lucide-react-native';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import { isSameMonth, format } from 'date-fns';
 
@@ -15,18 +15,20 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 const Dashboard = ({ navigation }: { navigation: any }) => {
     const swipeableRefs = React.useRef<{ [key: string]: any }>({});
-    const { expenses, setExpenses, removeExpense, user } = useStore();
+    const { expenses, setExpenses, removeExpense, user, budgets, setBudgets } = useStore();
     const [summary, setSummary] = useState({ total_spent: 0 });
     const [refreshing, setRefreshing] = useState(false);
 
     const fetchData = async () => {
         try {
-            const [summaryRes, expensesRes] = await Promise.all([
+            const [summaryRes, expensesRes, budgetsRes] = await Promise.all([
                 client.get('/expenses/summary'),
-                client.get('/expenses/')
+                client.get('/expenses/'),
+                client.get('/budgets/')
             ]);
             setSummary(summaryRes.data);
             setExpenses(expensesRes.data);
+            setBudgets(budgetsRes.data);
         } catch (error) {
             console.error('Failed to fetch dashboard data', error);
         }
@@ -164,6 +166,56 @@ const Dashboard = ({ navigation }: { navigation: any }) => {
                         </View>
                         <View style={styles.cardChip} />
                     </View>
+
+                    {budgets.length > 0 && (
+                        <View style={styles.budgetSection}>
+                            <View style={styles.sectionHeader}>
+                                <Text style={styles.sectionTitle}>Budget & Alerts</Text>
+                                <TouchableOpacity onPress={() => navigation.navigate('BudgetSettings')}>
+                                    <Text style={styles.editLink}>EDIT</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            {budgets.map(budget => {
+                                const progress = Math.min((budget.current_spent / budget.monthly_limit) * 100, 100);
+                                const isWarning = progress >= 80 && progress < 100;
+                                const isDanger = progress >= 100;
+
+                                return (
+                                    <View key={budget.id} style={styles.budgetCard}>
+                                        <View style={styles.budgetInfo}>
+                                            <View style={styles.budgetLeft}>
+                                                <Text style={styles.budgetCategory}>{budget.category}</Text>
+                                                {isDanger ? (
+                                                    <View style={styles.alertBadge}>
+                                                        <AlertTriangle color={COLORS.danger} size={10} />
+                                                        <Text style={styles.alertText}>OVER BUDGET</Text>
+                                                    </View>
+                                                ) : isWarning ? (
+                                                    <View style={[styles.alertBadge, { backgroundColor: 'rgba(255,165,0,0.1)' }]}>
+                                                        <AlertTriangle color="#FFA500" size={10} />
+                                                        <Text style={[styles.alertText, { color: '#FFA500' }]}>NEAR LIMIT</Text>
+                                                    </View>
+                                                ) : null}
+                                            </View>
+                                            <Text style={styles.budgetSpent}>
+                                                ₹{budget.current_spent.toLocaleString()} <Text style={{ color: '#444' }}>/ ₹{budget.monthly_limit.toLocaleString()}</Text>
+                                            </Text>
+                                        </View>
+                                        <View style={styles.progressBarBg}>
+                                            <View
+                                                style={[
+                                                    styles.progressBarFill,
+                                                    { width: `${progress}%` },
+                                                    isDanger ? { backgroundColor: COLORS.danger } : isWarning ? { backgroundColor: '#FFA500' } : {}
+                                                ]}
+                                            />
+                                        </View>
+                                    </View>
+                                );
+                            })}
+                        </View>
+                    )}
 
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>Recent Transactions</Text>
@@ -441,6 +493,70 @@ const styles = StyleSheet.create({
         height: '84%',
         borderRadius: 20,
         marginRight: 10,
+    },
+    budgetSection: {
+        marginBottom: 40,
+    },
+    editLink: {
+        color: COLORS.primary,
+        fontSize: 10,
+        fontWeight: 'bold',
+        letterSpacing: 2,
+    },
+    budgetCard: {
+        backgroundColor: COLORS.card,
+        borderRadius: 20,
+        padding: 20,
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: '#111',
+    },
+    budgetInfo: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    budgetLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    budgetCategory: {
+        color: COLORS.text,
+        fontSize: 14,
+        fontWeight: 'bold',
+    },
+    alertBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255, 68, 68, 0.1)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 6,
+        gap: 4,
+    },
+    alertText: {
+        color: COLORS.danger,
+        fontSize: 8,
+        fontWeight: 'bold',
+        textTransform: 'uppercase',
+    },
+    budgetSpent: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: COLORS.text,
+    },
+    progressBarBg: {
+        height: 6,
+        backgroundColor: '#0A0A0A',
+        borderRadius: 3,
+        overflow: 'hidden',
+    },
+    progressBarFill: {
+        height: '100%',
+        backgroundColor: COLORS.primary,
+        borderRadius: 3,
     },
 });
 

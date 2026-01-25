@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, ActivityIndicator, Platform, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, ActivityIndicator, Platform, Modal, RefreshControl } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../theme/colors';
 import * as ImagePicker from 'expo-image-picker';
 import client from '../../api/client';
 import { useStore } from '../../store/useStore';
-import { Camera, Image as ImageIcon, Plus, Info, Tag, IndianRupee, Clock, CheckCircle2, XCircle, FileText, Wallet, Calendar } from 'lucide-react-native';
+import { Camera, Image as ImageIcon, Plus, Info, Tag, IndianRupee, Clock, CheckCircle2, XCircle, FileText, Wallet, Calendar, AlertTriangle } from 'lucide-react-native';
 
 const CATEGORIES = ['Food Delivery', 'Groceries', 'Shopping', 'Transport', 'Entertainment', 'Bills & Utilities', 'Others'];
 const PAYMENT_MODES = ['upi', 'card', 'cash'];
@@ -17,6 +18,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 
 const AddExpense = ({ navigation, route }: { navigation: any, route?: any }) => {
     const editExpense = route?.params?.editExpense;
+    const { user, budgets } = useStore();
 
     const [amount, setAmount] = useState(editExpense?.amount.toString() || '');
     const [category, setCategory] = useState(editExpense?.category || CATEGORIES[0]);
@@ -35,8 +37,24 @@ const AddExpense = ({ navigation, route }: { navigation: any, route?: any }) => 
     const [bulkExpenses, setBulkExpenses] = useState<any[]>([]);
     const [date, setDate] = useState(editExpense?.date ? new Date(editExpense.date) : new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
 
-    // If editExpense changes (e.g. navigating between different edits), reset state
+    const resetState = () => {
+        setAmount('');
+        setDescription('');
+        setVendor('');
+        setItems([]);
+        setLineItems([]);
+        setGstDetails(null);
+        setImage(null);
+        setCategory(CATEGORIES[0]);
+        setPaymentMode(PAYMENT_MODES[0]);
+        setTaxAmount('0.00');
+        setTaxType(null);
+        setDate(new Date());
+    };
+
+    // Handle initial state setup and resets
     React.useEffect(() => {
         if (editExpense) {
             setAmount(editExpense.amount.toString());
@@ -53,6 +71,16 @@ const AddExpense = ({ navigation, route }: { navigation: any, route?: any }) => 
             setDate(new Date(editExpense.date));
         }
     }, [editExpense]);
+
+    // Reset when tab is focused and not in edit mode
+    useFocusEffect(
+        React.useCallback(() => {
+            if (!editExpense && !amount && !vendor) {
+                // Already likely fresh or first load
+            }
+            return () => { };
+        }, [editExpense])
+    );
 
     const parseReceipt = async (base64Image: string) => {
         setParsing(true);
@@ -218,6 +246,14 @@ const AddExpense = ({ navigation, route }: { navigation: any, route?: any }) => 
         }
     };
 
+    const onRefresh = React.useCallback(async () => {
+        setRefreshing(true);
+        resetState();
+        navigation.setParams({ editExpense: undefined });
+        // Simulate a small delay for the animation
+        setTimeout(() => setRefreshing(false), 800);
+    }, []);
+
     const handleSubmit = async () => {
         if (!amount) {
             Alert.alert('Error', 'Please enter an amount');
@@ -277,6 +313,9 @@ const AddExpense = ({ navigation, route }: { navigation: any, route?: any }) => 
         }
     };
 
+    const budgetForCategory = budgets.find(b => b.category === category);
+    const isOverBudget = budgetForCategory && (budgetForCategory.current_spent + (parseFloat(amount) || 0) > budgetForCategory.monthly_limit);
+
     return (
         <SafeAreaView style={styles.container}>
             <KeyboardAwareScrollView
@@ -286,6 +325,15 @@ const AddExpense = ({ navigation, route }: { navigation: any, route?: any }) => 
                 keyboardShouldPersistTaps="handled"
                 extraScrollHeight={100}
                 enableOnAndroid={true}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        tintColor={COLORS.primary}
+                        title="Pull to Clear Form"
+                        titleColor={COLORS.textSecondary}
+                    />
+                }
             >
                 <View style={styles.header}>
                     <Text style={styles.title}>{editExpense ? 'Update Expense' : 'New Expense'}</Text>
@@ -294,18 +342,26 @@ const AddExpense = ({ navigation, route }: { navigation: any, route?: any }) => 
 
                 <View style={styles.inputCard}>
                     <View style={styles.amountHeader}>
-                        <IndianRupee color={COLORS.primary} size={24} />
                         <Text style={styles.amountLabel}>Amount (INR)</Text>
                     </View>
                     <TextInput
                         style={styles.amountInput}
-                        placeholder="0.00"
+                        placeholder="0"
                         placeholderTextColor={COLORS.textSecondary}
                         keyboardType="numeric"
                         value={amount}
                         onChangeText={setAmount}
                     />
                 </View>
+
+                {isOverBudget && (
+                    <View style={styles.budgetWarning}>
+                        <AlertTriangle color={COLORS.danger} size={16} />
+                        <Text style={styles.budgetWarningText}>
+                            This expense will exceed your ₹{budgetForCategory.monthly_limit.toLocaleString()} budget for {category}!
+                        </Text>
+                    </View>
+                )}
 
                 <View style={styles.section}>
                     <Text style={styles.label}>Scan / Paste Magic</Text>
@@ -602,6 +658,11 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: COLORS.text,
         marginTop: 10,
+    },
+    headerTitleRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
     },
     inputCard: {
         backgroundColor: COLORS.surface,
@@ -931,6 +992,23 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         textTransform: 'uppercase',
         letterSpacing: 1,
+    },
+    budgetWarning: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255, 68, 68, 0.1)',
+        padding: 16,
+        borderRadius: 16,
+        marginBottom: 25,
+        gap: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 68, 68, 0.2)',
+    },
+    budgetWarningText: {
+        flex: 1,
+        color: COLORS.danger,
+        fontSize: 12,
+        fontWeight: 'bold',
     },
 });
 

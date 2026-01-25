@@ -1,6 +1,7 @@
 import React from 'react';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
 import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Home, PlusCircle, BarChart2, User, Receipt } from 'lucide-react-native';
 import { useStore } from '../store/useStore';
 import { COLORS } from '../theme/colors';
@@ -10,11 +11,13 @@ import Dashboard from '../screens/main/Dashboard';
 import AddExpense from '../screens/main/AddExpense';
 import Analytics from '../screens/main/Analytics';
 import Profile from '../screens/main/Profile';
+import BudgetSettings from '../screens/main/BudgetSettings';
 import Login from '../screens/auth/Login';
 import Register from '../screens/auth/Register';
 import ReceiptGallery from '../screens/main/ReceiptGallery';
 
 const Tab = createMaterialTopTabNavigator();
+const Stack = createNativeStackNavigator();
 
 const TabNavigator = () => (
     <Tab.Navigator
@@ -80,6 +83,13 @@ const TabNavigator = () => (
     </Tab.Navigator>
 );
 
+const MainStack = () => (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="MainTabs" component={TabNavigator} />
+        <Stack.Screen name="BudgetSettings" component={BudgetSettings} />
+    </Stack.Navigator>
+);
+
 export const AppNavigator = () => {
     const { token } = useStore();
     const [isRegistering, setIsRegistering] = React.useState(false);
@@ -87,7 +97,7 @@ export const AppNavigator = () => {
     if (token) {
         return (
             <NavigationContainer>
-                <TabNavigator />
+                <MainStack />
             </NavigationContainer>
         );
     }

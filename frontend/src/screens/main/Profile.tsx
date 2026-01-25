@@ -4,12 +4,12 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch, Modal, Te
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useStore } from '../../store/useStore';
 import { COLORS } from '../../theme/colors';
-import { LogOut, User as UserIcon, Settings, Bell, Shield, Lock, ChevronRight, X, Smartphone, Fingerprint } from 'lucide-react-native';
+import { LogOut, User as UserIcon, Settings, Bell, Shield, Lock, ChevronRight, X, Smartphone, Fingerprint, PieChart } from 'lucide-react-native';
 import client from '../../api/client';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { requestNotificationPermissions } from '../../utils/notifications';
 
-const Profile = () => {
+const Profile = ({ navigation }: { navigation: any }) => {
     const { user, logout, expenses, biometricsEnabled, setBiometricsEnabled, setUser } = useStore();
     const [pushEnabled, setPushEnabled] = useState(true);
     const [resetModalVisible, setResetModalVisible] = useState(false);
@@ -208,6 +208,13 @@ const Profile = () => {
                         icon={Lock}
                         title="Reset Password"
                         onPress={() => setResetModalVisible(true)}
+                    />
+
+                    <MenuItem
+                        icon={PieChart}
+                        title="Monthly Budgeting"
+                        onPress={() => navigation.navigate('BudgetSettings')}
+                        color={COLORS.primary}
                     />
 
                     <MenuItem
