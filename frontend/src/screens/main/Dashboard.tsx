@@ -5,7 +5,7 @@ import { COLORS } from '../../theme/colors';
 import client from '../../api/client';
 import { useStore } from '../../store/useStore';
 import { useFocusEffect } from '@react-navigation/native';
-import { TrendingUp, ArrowUpRight, ArrowDownLeft, ShoppingBag, Coffee, Car, Utensils, Trash2, Edit2, ChevronDown, ChevronRight, PieChart, AlertTriangle } from 'lucide-react-native';
+import { TrendingUp, ArrowUpRight, ArrowDownLeft, ShoppingBag, Coffee, Car, Utensils, Trash2, Edit2, ChevronDown, ChevronRight, PieChart, AlertTriangle, Sun, Sunrise, MoonStar } from 'lucide-react-native';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import { isSameMonth, format } from 'date-fns';
 
@@ -107,11 +107,11 @@ const Dashboard = ({ navigation }: { navigation: any }) => {
         setRefreshing(false);
     };
 
-    const getGreeting = () => {
+    const getGreetingInfo = () => {
         const hour = new Date().getHours();
-        if (hour < 12) return 'Good Morning';
-        if (hour < 17) return 'Good Afternoon';
-        return 'Good Evening';
+        if (hour < 12) return { text: 'Good Morning', icon: Sunrise, color: '#FFD700' };
+        if (hour < 17) return { text: 'Good Afternoon', icon: Sun, color: '#FFA500' };
+        return { text: 'Good Evening', icon: MoonStar, color: '#BDC3C7' };
     };
 
     const getCategoryIcon = (category: string) => {
@@ -127,9 +127,14 @@ const Dashboard = ({ navigation }: { navigation: any }) => {
         <GestureHandlerRootView style={{ flex: 1 }}>
             <SafeAreaView style={styles.container}>
                 <View style={styles.topHeader}>
-                    <View>
-                        <Text style={styles.greeting}>{getGreeting()},</Text>
-                        <Text style={styles.userName}>{user?.name?.split(' ')[0] || 'Suryansh'}</Text>
+                    <View style={styles.greetingContainer}>
+                        <View style={styles.greetingIconContainer}>
+                            {React.createElement(getGreetingInfo().icon, { color: getGreetingInfo().color, size: 24 })}
+                        </View>
+                        <View>
+                            <Text style={styles.greeting}>{getGreetingInfo().text},</Text>
+                            <Text style={styles.userName}>{user?.name?.split(' ')[0] || 'Suryansh'}</Text>
+                        </View>
                     </View>
                 </View>
 
@@ -303,6 +308,25 @@ const styles = StyleSheet.create({
         fontSize: 22,
         fontWeight: 'bold',
         color: COLORS.text,
+    },
+    greetingContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 15,
+    },
+    greetingIconContainer: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        backgroundColor: COLORS.card,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#111',
+        shadowColor: COLORS.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
     },
     notificationButton: {
         width: 44,
