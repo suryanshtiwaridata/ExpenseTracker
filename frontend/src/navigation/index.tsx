@@ -19,22 +19,24 @@ const TabNavigator = () => (
     <Tab.Navigator
         tabBarPosition="bottom"
         screenOptions={{
-            tabBarActiveTintColor: COLORS.primary,
-            tabBarInactiveTintColor: COLORS.textSecondary,
+            tabBarActiveTintColor: COLORS.text,
+            tabBarInactiveTintColor: '#222',
             tabBarIndicatorStyle: {
-                backgroundColor: COLORS.primary,
-                top: 0,
+                height: 0,
             },
             tabBarStyle: {
-                backgroundColor: COLORS.surface,
+                backgroundColor: COLORS.background,
                 elevation: 0,
                 shadowOpacity: 0,
-                height: 60,
+                height: 70,
+                borderTopWidth: 1,
+                borderTopColor: '#0A0A0A',
             },
             tabBarLabelStyle: {
-                fontSize: 10,
+                fontSize: 9,
                 fontWeight: 'bold',
-                textTransform: 'none',
+                textTransform: 'uppercase',
+                letterSpacing: 1,
             },
             tabBarShowIcon: true,
         }}

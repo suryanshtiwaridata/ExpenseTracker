@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from app.models import UserCreate, UserInDB, Token, TokenData
+from app.models import UserCreate, UserInDB, Token, TokenData, UserUpdate
 from app.database import get_database
 from app.auth.utils import verify_password, get_password_hash, create_access_token
 from datetime import datetime
@@ -83,6 +83,29 @@ async def get_me(token: str = Depends(oauth2_scheme)):
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
+        return user
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+@router.put("/profile", response_model=UserInDB)
+async def update_profile(user_update: UserUpdate, token: str = Depends(oauth2_scheme)):
+    from jose import jwt, JWTError
+    from app.auth.utils import SECRET_KEY, ALGORITHM
+    
+    try:
+        payload_data = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload_data.get("sub")
+        if email is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        user = await db.users.find_one({"email": email})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        update_data = {k: v for k, v in user_update.dict().items() if v is not None}
+        if update_data:
+            await db.users.update_one({"email": email}, {"$set": update_data})
+            user = await db.users.find_one({"email": email})
+            
         return user
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")

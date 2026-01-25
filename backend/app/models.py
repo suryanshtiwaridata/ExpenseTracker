@@ -12,10 +12,16 @@ class ExpenseSource(str, Enum):
 class UserBase(BaseModel):
     email: EmailStr
     name: str
+    phone: Optional[str] = None
     currency: str = "INR"
 
 class UserCreate(UserBase):
     password: str
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    currency: Optional[str] = None
 
 class UserInDB(UserBase):
     id: str
