@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useIsFocused } from '@react-navigation/native';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch, Modal, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useStore } from '../../store/useStore';
@@ -23,6 +24,17 @@ const Profile = () => {
     const [updateName, setUpdateName] = useState(user?.name || '');
     const [updatePhone, setUpdatePhone] = useState(user?.phone || '');
     const [updateLoading, setUpdateLoading] = useState(false);
+
+    const isFocused = useIsFocused();
+
+    // Reset modals to default (closed) when screen is focused
+    useEffect(() => {
+        if (isFocused) {
+            setResetModalVisible(false);
+            setProfileModalVisible(false);
+            setPrivacyModalVisible(false);
+        }
+    }, [isFocused]);
 
     const authenticate = async (): Promise<boolean> => {
         const hasHardware = await LocalAuthentication.hasHardwareAsync();

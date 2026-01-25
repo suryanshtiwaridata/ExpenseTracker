@@ -14,20 +14,41 @@ const PAYMENT_MODES = ['upi', 'card', 'cash'];
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 
-const AddExpense = ({ navigation }: { navigation: any }) => {
-    const [amount, setAmount] = useState('');
-    const [category, setCategory] = useState(CATEGORIES[0]);
-    const [paymentMode, setPaymentMode] = useState(PAYMENT_MODES[0]);
-    const [taxAmount, setTaxAmount] = useState('0.00');
-    const [taxType, setTaxType] = useState<string | null>(null);
-    const [description, setDescription] = useState('');
-    const [vendor, setVendor] = useState('');
-    const [items, setItems] = useState<string[]>([]);
+const AddExpense = ({ navigation, route }: { navigation: any, route?: any }) => {
+    const editExpense = route?.params?.editExpense;
+
+    const [amount, setAmount] = useState(editExpense?.amount.toString() || '');
+    const [category, setCategory] = useState(editExpense?.category || CATEGORIES[0]);
+    const [paymentMode, setPaymentMode] = useState(editExpense?.payment_mode || PAYMENT_MODES[0]);
+    const [taxAmount, setTaxAmount] = useState(editExpense?.tax_amount?.toString() || '0.00');
+    const [taxType, setTaxType] = useState<string | null>(editExpense?.tax_type || null);
+    const [description, setDescription] = useState(editExpense?.description || '');
+    const [vendor, setVendor] = useState(editExpense?.vendor || '');
+    const [items, setItems] = useState<string[]>(editExpense?.items || []);
     const [loading, setLoading] = useState(false);
-    const [image, setImage] = useState<string | null>(null);
+    const [image, setImage] = useState<string | null>(editExpense?.receipt_image_base64 || null);
     const [parsing, setParsing] = useState(false);
     const [smsText, setSmsText] = useState('');
+    const [lineItems, setLineItems] = useState<{ name: string; price: number }[]>(editExpense?.line_items || []);
+    const [gstDetails, setGstDetails] = useState<{ cgst: number; sgst: number; igst: number; total_gst: number } | null>(editExpense?.gst_details || null);
     const [bulkExpenses, setBulkExpenses] = useState<any[]>([]);
+
+    // If editExpense changes (e.g. navigating between different edits), reset state
+    React.useEffect(() => {
+        if (editExpense) {
+            setAmount(editExpense.amount.toString());
+            setCategory(editExpense.category);
+            setPaymentMode(editExpense.payment_mode || PAYMENT_MODES[0]);
+            setTaxAmount(editExpense.tax_amount?.toString() || '0.00');
+            setTaxType(editExpense.tax_type || null);
+            setDescription(editExpense.description || '');
+            setVendor(editExpense.vendor || '');
+            setItems(editExpense.items || []);
+            setImage(editExpense.receipt_image_base64 || null);
+            setLineItems(editExpense.line_items || []);
+            setGstDetails(editExpense.gst_details || null);
+        }
+    }, [editExpense]);
 
     const parseReceipt = async (base64Image: string) => {
         setParsing(true);
@@ -50,7 +71,13 @@ const AddExpense = ({ navigation }: { navigation: any }) => {
             }
             if (response.data.tax_amount) {
                 setTaxAmount(response.data.tax_amount.toString());
-                setTaxType(response.data.tax_type || 'Tax');
+                setTaxType(response.data.tax_type || 'GST');
+            }
+            if (response.data.line_items) {
+                setLineItems(response.data.line_items);
+            }
+            if (response.data.gst_details) {
+                setGstDetails(response.data.gst_details);
             }
         } catch (error) {
             console.error('Failed to parse receipt', error);
@@ -179,9 +206,9 @@ const AddExpense = ({ navigation }: { navigation: any }) => {
 
         setLoading(true);
         try {
-            await client.post('/expenses/', {
+            const payload = {
                 amount: parseFloat(amount) || 0,
-                date: new Date().toISOString(),
+                date: editExpense?.date || new Date().toISOString(),
                 category,
                 payment_mode: paymentMode,
                 tax_amount: parseFloat(taxAmount) || 0,
@@ -189,21 +216,36 @@ const AddExpense = ({ navigation }: { navigation: any }) => {
                 description,
                 vendor,
                 items,
-                source: image ? 'receipt' : 'manual',
+                line_items: lineItems,
+                gst_details: gstDetails,
+                source: image ? 'receipt' : (editExpense?.source || 'manual'),
                 receipt_image_base64: image,
                 currency: 'INR',
-            });
+            };
 
-            Alert.alert('Success', 'Expense added!');
-            setAmount('');
-            setDescription('');
-            setVendor('');
-            setItems([]);
-            setImage(null);
-            navigation.navigate('Home');
+            if (editExpense) {
+                await client.put(`/expenses/${editExpense.id}`, payload);
+                Alert.alert('Success', 'Expense updated!');
+            } else {
+                await client.post('/expenses/', payload);
+                Alert.alert('Success', 'Expense added!');
+            }
+
+            // Reset only if not editing or navigate back
+            if (!editExpense) {
+                setAmount('');
+                setDescription('');
+                setVendor('');
+                setItems([]);
+                setLineItems([]);
+                setGstDetails(null);
+                setImage(null);
+            }
+
+            navigation.navigate('Home', { refresh: true });
         } catch (error) {
-            console.error('Failed to add expense', error);
-            Alert.alert('Error', 'Failed to add expense');
+            console.error('Failed to save expense', error);
+            Alert.alert('Error', 'Failed to save expense');
         } finally {
             setLoading(false);
         }
@@ -220,8 +262,8 @@ const AddExpense = ({ navigation }: { navigation: any }) => {
                 enableOnAndroid={true}
             >
                 <View style={styles.header}>
-                    <Text style={styles.title}>New Expense</Text>
-                    <Text style={styles.subtitle}>Fill in details or scan a receipt</Text>
+                    <Text style={styles.title}>{editExpense ? 'Update Expense' : 'New Expense'}</Text>
+                    <Text style={styles.subtitle}>{editExpense ? 'Refine your transaction details' : 'Fill in details or scan a receipt'}</Text>
                 </View>
 
                 <View style={styles.inputCard}>
@@ -387,16 +429,41 @@ const AddExpense = ({ navigation }: { navigation: any }) => {
                     </View>
                 )}
 
-                {items.length > 0 && (
+                {lineItems.length > 0 && (
                     <View style={styles.section}>
-                        <Text style={styles.label}>Detected Items</Text>
+                        <Text style={styles.label}>Itemized Breakdown</Text>
                         <View style={styles.itemsCard}>
-                            {items.map((item, index) => (
+                            {lineItems.map((item, index) => (
                                 <View key={index} style={styles.itemRow}>
-                                    <Clock color={COLORS.textSecondary} size={14} />
-                                    <Text style={styles.itemText}>{item}</Text>
+                                    <View style={styles.itemInfo}>
+                                        <Clock color={COLORS.textSecondary} size={14} />
+                                        <Text style={styles.itemText}>{item.name}</Text>
+                                    </View>
+                                    <Text style={styles.itemPrice}>₹{item.price.toLocaleString()}</Text>
                                 </View>
                             ))}
+                            {gstDetails && (gstDetails.cgst > 0 || gstDetails.sgst > 0 || gstDetails.igst > 0) && (
+                                <View style={styles.gstDivider}>
+                                    {gstDetails.cgst > 0 && (
+                                        <View style={styles.gstRow}>
+                                            <Text style={styles.gstLabel}>CGST</Text>
+                                            <Text style={styles.gstValue}>₹{gstDetails.cgst.toLocaleString()}</Text>
+                                        </View>
+                                    )}
+                                    {gstDetails.sgst > 0 && (
+                                        <View style={styles.gstRow}>
+                                            <Text style={styles.gstLabel}>SGST</Text>
+                                            <Text style={styles.gstValue}>₹{gstDetails.sgst.toLocaleString()}</Text>
+                                        </View>
+                                    )}
+                                    {gstDetails.igst > 0 && (
+                                        <View style={styles.gstRow}>
+                                            <Text style={styles.gstLabel}>IGST</Text>
+                                            <Text style={styles.gstValue}>₹{gstDetails.igst.toLocaleString()}</Text>
+                                        </View>
+                                    )}
+                                </View>
+                            )}
                         </View>
                     </View>
                 )}
@@ -592,12 +659,44 @@ const styles = StyleSheet.create({
     itemRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
+        justifyContent: 'space-between',
         paddingVertical: 10,
+    },
+    itemInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        flex: 1,
     },
     itemText: {
         color: COLORS.textSecondary,
         fontSize: 14,
+        flex: 1,
+    },
+    itemPrice: {
+        color: COLORS.text,
+        fontSize: 14,
+        fontWeight: 'bold',
+    },
+    gstDivider: {
+        marginTop: 10,
+        paddingTop: 10,
+        borderTopWidth: 1,
+        borderTopColor: '#1A1A1A',
+        gap: 6,
+    },
+    gstRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+    gstLabel: {
+        color: COLORS.textSecondary,
+        fontSize: 12,
+        fontWeight: 'bold',
+    },
+    gstValue: {
+        color: COLORS.textSecondary,
+        fontSize: 12,
     },
     submitButton: {
         backgroundColor: COLORS.primary,

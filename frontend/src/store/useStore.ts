@@ -16,6 +16,9 @@ interface Expense {
     description?: string;
     vendor?: string;
     items?: string[];
+    line_items?: { name: string; price: number }[];
+    gst_details?: { cgst: number; sgst: number; igst: number; total_gst: number };
+    receipt_image_base64?: string;
     source: string;
     payment_mode?: string;
     tax_amount?: number;

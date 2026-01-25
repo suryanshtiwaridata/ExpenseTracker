@@ -5,7 +5,7 @@ import { COLORS } from '../../theme/colors';
 import client from '../../api/client';
 import { useStore } from '../../store/useStore';
 import { useFocusEffect } from '@react-navigation/native';
-import { TrendingUp, ArrowUpRight, ArrowDownLeft, ShoppingBag, Coffee, Car, Utensils, Trash2, ChevronDown, ChevronRight } from 'lucide-react-native';
+import { TrendingUp, ArrowUpRight, ArrowDownLeft, ShoppingBag, Coffee, Car, Utensils, Trash2, Edit2, ChevronDown, ChevronRight } from 'lucide-react-native';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import { isSameMonth, format } from 'date-fns';
 
@@ -13,7 +13,8 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
     UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-const Dashboard = () => {
+const Dashboard = ({ navigation }: { navigation: any }) => {
+    const swipeableRefs = React.useRef<{ [key: string]: any }>({});
     const { expenses, setExpenses, removeExpense, user } = useStore();
     const [summary, setSummary] = useState({ total_spent: 0 });
     const [refreshing, setRefreshing] = useState(false);
@@ -77,6 +78,17 @@ const Dashboard = () => {
                 onPress={() => handleDeleteExpense(id)}
             >
                 <Trash2 color="white" size={24} />
+            </TouchableOpacity>
+        );
+    };
+
+    const renderLeftActions = (expense: any) => {
+        return (
+            <TouchableOpacity
+                style={styles.editAction}
+                onPress={() => navigation.navigate('Add', { editExpense: expense })}
+            >
+                <Edit2 color="white" size={24} />
             </TouchableOpacity>
         );
     };
@@ -169,29 +181,48 @@ const Dashboard = () => {
                             {recentExpenses.map((expense: any) => (
                                 <Swipeable
                                     key={expense.id}
+                                    ref={(ref) => {
+                                        if (ref) swipeableRefs.current[expense.id] = ref;
+                                    }}
                                     renderRightActions={() => renderRightActions(expense.id)}
-                                    onSwipeableOpen={() => handleDeleteExpense(expense.id)}
+                                    renderLeftActions={() => renderLeftActions(expense)}
+                                    onSwipeableOpen={(direction) => {
+                                        if (direction === 'right') {
+                                            handleDeleteExpense(expense.id);
+                                            swipeableRefs.current[expense.id]?.close();
+                                        } else if (direction === 'left') {
+                                            swipeableRefs.current[expense.id]?.close();
+                                            navigation.navigate('Add', { editExpense: expense });
+                                        }
+                                    }}
                                 >
-                                    <View style={styles.expenseItem}>
-                                        <View style={styles.expenseLeft}>
-                                            <View style={[styles.categoryIconCircle, { borderColor: COLORS.border }]}>
-                                                {React.createElement(getCategoryIcon(expense.category), { color: COLORS.text, size: 18 })}
-                                            </View>
-                                            <View style={styles.expenseInfo}>
-                                                <Text style={styles.expenseVendor}>{expense.vendor || 'Unknown Vendor'}</Text>
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                                    <Text style={styles.expenseCategory}>{expense.category}</Text>
-                                                    <Text style={styles.dotSeparator}>•</Text>
-                                                    <Text style={styles.expenseDate}>{new Date(expense.date).toLocaleDateString()}</Text>
+                                    <TouchableOpacity
+                                        activeOpacity={0.7}
+                                        onLongPress={() => {
+                                            navigation.navigate('Add', { editExpense: expense });
+                                        }}
+                                    >
+                                        <View style={styles.expenseItem}>
+                                            <View style={styles.expenseLeft}>
+                                                <View style={[styles.categoryIconCircle, { borderColor: COLORS.border }]}>
+                                                    {React.createElement(getCategoryIcon(expense.category), { color: COLORS.text, size: 18 })}
+                                                </View>
+                                                <View style={styles.expenseInfo}>
+                                                    <Text style={styles.expenseVendor}>{expense.vendor || 'Unknown Vendor'}</Text>
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                        <Text style={styles.expenseCategory}>{expense.category}</Text>
+                                                        <Text style={styles.dotSeparator}>•</Text>
+                                                        <Text style={styles.expenseDate}>{new Date(expense.date).toLocaleDateString()}</Text>
+                                                    </View>
                                                 </View>
                                             </View>
+                                            <View style={styles.expenseRight}>
+                                                <Text style={styles.expenseAmount}>
+                                                    ₹{expense.amount.toLocaleString()}
+                                                </Text>
+                                            </View>
                                         </View>
-                                        <View style={styles.expenseRight}>
-                                            <Text style={styles.expenseAmount}>
-                                                ₹{expense.amount.toLocaleString()}
-                                            </Text>
-                                        </View>
-                                    </View>
+                                    </TouchableOpacity>
                                 </Swipeable>
                             ))}
                         </View>
@@ -400,8 +431,19 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.danger,
         justifyContent: 'center',
         alignItems: 'center',
-        width: 70,
-        height: '100%',
+        width: 80,
+        height: '84%',
+        borderRadius: 20,
+        marginLeft: 10,
+    },
+    editAction: {
+        backgroundColor: COLORS.primary,
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: 80,
+        height: '84%',
+        borderRadius: 20,
+        marginRight: 10,
     },
 });
 

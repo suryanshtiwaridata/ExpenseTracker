@@ -47,6 +47,23 @@ async def delete_expense(expense_id: str, current_user: dict = Depends(get_curre
         raise HTTPException(status_code=404, detail="Expense not found")
     return {"status": "deleted"}
 
+@router.put("/{expense_id}", response_model=Expense)
+async def update_expense(expense_id: str, expense: ExpenseCreate, current_user: dict = Depends(get_current_user)):
+    # Check if expense exists and belongs to user
+    existing = await db.expenses.find_one({"id": expense_id, "user_id": current_user["id"]})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    
+    expense_dict = expense.dict()
+    expense_dict["id"] = expense_id
+    expense_dict["user_id"] = current_user["id"]
+    expense_dict["updated_at"] = datetime.utcnow()
+    # Preserve created_at
+    expense_dict["created_at"] = existing.get("created_at") or datetime.utcnow()
+    
+    await db.expenses.replace_one({"id": expense_id}, expense_dict)
+    return expense_dict
+
 @router.get("/summary")
 async def get_summary(current_user: dict = Depends(get_current_user)):
     # Simple summary of total spent

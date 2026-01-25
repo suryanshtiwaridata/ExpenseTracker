@@ -1,7 +1,7 @@
 import React from 'react';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
 import { NavigationContainer } from '@react-navigation/native';
-import { Home, PlusCircle, BarChart2, User } from 'lucide-react-native';
+import { Home, PlusCircle, BarChart2, User, Receipt } from 'lucide-react-native';
 import { useStore } from '../store/useStore';
 import { COLORS } from '../theme/colors';
 
@@ -12,6 +12,7 @@ import Analytics from '../screens/main/Analytics';
 import Profile from '../screens/main/Profile';
 import Login from '../screens/auth/Login';
 import Register from '../screens/auth/Register';
+import ReceiptGallery from '../screens/main/ReceiptGallery';
 
 const Tab = createMaterialTopTabNavigator();
 
@@ -60,6 +61,13 @@ const TabNavigator = () => (
             component={Analytics}
             options={{
                 tabBarIcon: ({ color }) => <BarChart2 color={color} size={24} />,
+            }}
+        />
+        <Tab.Screen
+            name="Gallery"
+            component={ReceiptGallery}
+            options={{
+                tabBarIcon: ({ color }) => <Receipt color={color} size={24} />,
             }}
         />
         <Tab.Screen

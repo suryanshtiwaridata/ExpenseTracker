@@ -39,6 +39,8 @@ class ExpenseBase(BaseModel):
     receipt_image_base64: Optional[str] = None
     vendor: Optional[str] = None
     items: Optional[List[str]] = None
+    line_items: Optional[List[dict]] = None
+    gst_details: Optional[dict] = None
     source: ExpenseSource = ExpenseSource.MANUAL
     currency: str = "INR"
 
